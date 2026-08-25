@@ -43,6 +43,22 @@ public static class SettingKeys
             public const string GenerateRequestTemplate = "local_ai_generate_request_template";
         }
 
+        public static class Resegmentation
+        {
+            public const string Mode = "resegmentation_mode";
+            public const string Endpoint = "resegmentation_endpoint";
+            public const string Model = "resegmentation_model";
+            public const string ApiKey = "resegmentation_api_key";
+            public const string SystemPrompt = "resegmentation_system_prompt";
+            public const string UserPrompt = "resegmentation_user_prompt";
+            public const string TimeoutSeconds = "resegmentation_timeout_seconds";
+            public const string ValidatorEndpoint = "resegmentation_validator_endpoint";
+            public const string ValidatorModel = "resegmentation_validator_model";
+            public const string ValidatorApiKey = "resegmentation_validator_api_key";
+            public const string ValidatorSystemPrompt = "resegmentation_validator_system_prompt";
+            public const string ValidatorUserPrompt = "resegmentation_validator_user_prompt";
+        }
+
         public static class DeepL
         {
             public const string DeeplApiKey = "deepl_api_key";

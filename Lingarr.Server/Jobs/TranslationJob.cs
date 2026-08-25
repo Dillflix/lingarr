@@ -221,19 +221,21 @@ public class TranslationJob
                 if (contextBefore > 0 || contextAfter > 0)
                 {
                     _logger.LogInformation(
-                        "Using individual translation with context (before: {contextBefore}, after: {contextAfter}) for subtitle: {filePath}",
-                        contextBefore, contextAfter, translationRequest.SubtitleToTranslate);
+                        "Sentence-aware translation units are enabled; legacy context settings (before: {contextBefore}, after: {contextAfter}) are ignored for model input.",
+                        contextBefore, contextAfter);
                 }
 
-                translatedSubtitles = await translator.TranslateSubtitles(
+                var sentenceAwareTranslator = new SentenceAwareTranslationUnitService(
+                    translator,
+                    _progressService,
+                    _logger);
+
+                translatedSubtitles = await sentenceAwareTranslator.TranslateSubtitles(
                     subtitles,
                     request,
                     stripSubtitleFormatting,
                     preserveLineBreaks,
-                    contextBefore,
-                    contextAfter,
-                    cancellationToken
-                );
+                    cancellationToken);
             }
 
             if (settings[SettingKeys.Translation.FixOverlappingSubtitles] == "true")

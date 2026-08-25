@@ -219,11 +219,11 @@ public abstract class BaseLanguageService : BaseTranslationService, IContextualT
     /// </summary>
     /// <returns>A list of language configurations from the JSON file</returns>
     /// <exception cref="JsonException">Thrown when deserialization of the JSON file fails</exception>
-    /// <exception cref="IOException">Thrown when reading the language file fails</exception>
-    private async Task<List<SourceLanguage>> GetJson(string languageFilePath)
+    /// <exception cref="IOException">Thrown when the file cannot be read</exception>
+    private async Task<List<JsonLanguage>> GetJson(string languageFilePath)
     {
-        await using var fileStream = File.OpenRead(languageFilePath);
-        var sourceLanguages = await JsonSerializer.DeserializeAsync<List<SourceLanguage>>(fileStream);
+        string jsonContent = await File.ReadAllTextAsync(languageFilePath);
+        var sourceLanguages = JsonSerializer.Deserialize<List<JsonLanguage>>(jsonContent);
         if (sourceLanguages == null)
         {
             throw new JsonException($"Failed to deserialize {languageFilePath}");

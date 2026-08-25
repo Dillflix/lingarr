@@ -49,6 +49,7 @@ const props = withDefaults(
         rows?: number
         placeholders?: IPlaceholder[]
         requiredPlaceholders?: string[]
+        allowEmpty?: boolean
     }>(),
     {
         id: `textarea-${Math.random().toString(36).substring(2, 9)}`,
@@ -56,7 +57,8 @@ const props = withDefaults(
         rows: 4,
         placeholder: '',
         placeholders: () => [],
-        requiredPlaceholders: () => []
+        requiredPlaceholders: () => [],
+        allowEmpty: false
     }
 )
 
@@ -79,6 +81,13 @@ const textareaClasses = computed(() => [
 ])
 
 const validatePlaceholders = (value: string) => {
+    if (props.allowEmpty && value.trim().length === 0) {
+        missingPlaceholders.value = []
+        isValid.value = true
+        isInvalid.value = false
+        return true
+    }
+
     const missing = props.requiredPlaceholders.filter((placeholder) => !value.includes(placeholder))
     missingPlaceholders.value = missing
     isValid.value = missing.length === 0

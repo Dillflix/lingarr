@@ -2,16 +2,18 @@
 using System.Text.RegularExpressions;
 using Lingarr.Contracts.Models;
 using Lingarr.Contracts.Models.Batch;
+using Lingarr.Contracts.Translation;
 using Lingarr.Server.Interfaces.Services;
 using Lingarr.Server.Models;
 
 namespace Lingarr.Server.Services.Translation.Base;
 
-public abstract class BaseLanguageService : BaseTranslationService
+public abstract class BaseLanguageService : BaseTranslationService, IContextualTranslationService
 {
     private static readonly Regex PlaceholderPattern = new(@"\{(\w+)\}", RegexOptions.Compiled);
 
     private readonly string? _languageFilePath;
+    private readonly AsyncLocal<IReadOnlyList<TranslationContextPair>?> _contextPairsBefore = new();
     private Task<List<SourceLanguage>>? _cachedLanguages;
     protected string? _prompt;
     protected string? _userPrompt;
@@ -27,6 +29,34 @@ public abstract class BaseLanguageService : BaseTranslationService
     {
         _languageFilePath = languageFilePath;
         _replacements = new Dictionary<string, string>();
+    }
+
+    /// <inheritdoc />
+    public async Task<string> TranslateWithContextAsync(
+        string text,
+        string sourceLanguage,
+        string targetLanguage,
+        List<string>? contextLinesBefore,
+        List<string>? contextLinesAfter,
+        IReadOnlyList<TranslationContextPair>? contextPairsBefore,
+        CancellationToken cancellationToken)
+    {
+        var previousContext = _contextPairsBefore.Value;
+        _contextPairsBefore.Value = contextPairsBefore;
+        try
+        {
+            return await TranslateAsync(
+                text,
+                sourceLanguage,
+                targetLanguage,
+                contextLinesBefore,
+                contextLinesAfter,
+                cancellationToken);
+        }
+        finally
+        {
+            _contextPairsBefore.Value = previousContext;
+        }
     }
 
     protected static string ReplacePlaceholders(string? template, Dictionary<string, string> replacements)
@@ -51,7 +81,8 @@ public abstract class BaseLanguageService : BaseTranslationService
             ["model"] = model,
             ["lineToTranslate"] = lineToTranslate,
             ["contextBefore"] = string.Join("\n", contextLinesBefore ?? []),
-            ["contextAfter"] = string.Join("\n", contextLinesAfter ?? [])
+            ["contextAfter"] = string.Join("\n", contextLinesAfter ?? []),
+            ["contextPairsBefore"] = FormatContextPairs(_contextPairsBefore.Value)
         };
         var systemPrompt = ReplacePlaceholders(_prompt, replacements);
         var userMessage = string.IsNullOrEmpty(_userPrompt)
@@ -62,6 +93,19 @@ public abstract class BaseLanguageService : BaseTranslationService
         return replacements;
     }
 
+    private string FormatContextPairs(IReadOnlyList<TranslationContextPair>? pairs)
+    {
+        if (pairs is null || pairs.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var sourceLabel = _replacements.GetValueOrDefault("sourceLanguage", "Source");
+        var targetLabel = _replacements.GetValueOrDefault("targetLanguage", "Target");
+        return string.Concat(pairs.Select(pair =>
+            $"{sourceLabel}: {pair.Source}\n{targetLabel}: {pair.Target}\n"));
+    }
+
     protected Dictionary<string, string> GetBatchReplacements(string model, string serializedBatch)
     {
         var replacements = new Dictionary<string, string>(_replacements)
@@ -69,7 +113,8 @@ public abstract class BaseLanguageService : BaseTranslationService
             ["model"] = model,
             ["lineToTranslate"] = string.Empty,
             ["contextBefore"] = string.Empty,
-            ["contextAfter"] = string.Empty
+            ["contextAfter"] = string.Empty,
+            ["contextPairsBefore"] = string.Empty
         };
         replacements["systemPrompt"] = ReplacePlaceholders(_prompt, replacements);
         replacements["userMessage"] = serializedBatch;
@@ -88,7 +133,8 @@ public abstract class BaseLanguageService : BaseTranslationService
             ["translatedLine"] = translatedLine,
             ["lineToTranslate"] = string.Empty,
             ["contextBefore"] = string.Empty,
-            ["contextAfter"] = string.Empty
+            ["contextAfter"] = string.Empty,
+            ["contextPairsBefore"] = string.Empty
         };
         var systemPrompt = ReplacePlaceholders(_proofreadPrompt, replacements);
         var userMessage = string.IsNullOrEmpty(_proofreadUserPrompt)

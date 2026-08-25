@@ -8,7 +8,8 @@
                 <SaveNotification ref="saveNotification" />
                 <div class="flex flex-col space-x-2">
                     <span class="font-semibold">Translation system prompt</span>
-                    Define the AI's behavior and tone by setting global instructions.
+                    Define the AI's behavior and tone by setting global instructions. This may be
+                    left empty for translation-specialized models that expect a single user prompt.
                 </div>
                 <TextAreaComponent
                     v-model="aiPrompt"
@@ -16,13 +17,15 @@
                     :min-height="100"
                     :placeholders="systemPlaceholders"
                     :required-placeholders="['{sourceLanguage}', '{targetLanguage}']"
+                    allow-empty
                     @update:validation="(val) => (isSystemPromptValid = val)" />
 
                 <div v-if="useBatchTranslation !== 'true'" class="space-y-4">
                     <div class="flex flex-col space-x-2">
                         <span class="font-semibold">Translation user prompt</span>
-                        Use the context placeholders to include lines before and after the current
-                        subtitle, helping the AI generate a more accurate translation.
+                        Use context placeholders to include surrounding source lines. Use translated
+                        context pairs to include already completed source/target pairs, which can
+                        improve consistency and disambiguation for translation-specialized models.
                     </div>
                     <TextAreaComponent
                         v-model="aiUserPrompt"
@@ -33,7 +36,8 @@
                             PLACEHOLDER.SOURCE_LANGUAGE,
                             PLACEHOLDER.TARGET_LANGUAGE,
                             PLACEHOLDER.CONTEXT_BEFORE,
-                            PLACEHOLDER.CONTEXT_AFTER
+                            PLACEHOLDER.CONTEXT_AFTER,
+                            PLACEHOLDER.CONTEXT_PAIRS_BEFORE
                         ]"
                         :required-placeholders="['{lineToTranslate}']"
                         @update:validation="(val) => (isUserPromptValid = val)" />
@@ -44,6 +48,11 @@
                         :validation-type="INPUT_VALIDATION_TYPE.NUMBER"
                         label="Context before"
                         @update:validation="(val) => (isValid.contextBefore = val)" />
+                    <p class="text-secondary-content/60 text-xs">
+                        This count controls both {contextBefore} source-only history and
+                        {contextPairsBefore} completed source/target history. Translated pair history
+                        automatically skips duplicate subtitle rendering layers.
+                    </p>
                     <InputComponent
                         v-model="contextAfter"
                         :type="INPUT_TYPE.NUMBER"
@@ -71,7 +80,7 @@ import SaveNotification from '@/components/common/SaveNotification.vue'
 
 const settingsStore = useSettingStore()
 const saveNotification = ref<InstanceType<typeof SaveNotification> | null>(null)
-const isSystemPromptValid = ref(false)
+const isSystemPromptValid = ref(true)
 const isUserPromptValid = ref(false)
 const isValid = reactive({
     contextBefore: true,
@@ -82,18 +91,6 @@ const useBatchTranslation = computed(
     () => settingsStore.getSetting(SETTINGS.USE_BATCH_TRANSLATION) as string
 )
 
-const systemPlaceholders = computed(() => {
-    const items = [PLACEHOLDER.SOURCE_LANGUAGE, PLACEHOLDER.TARGET_LANGUAGE]
-    if (useBatchTranslation.value !== 'true') {
-        items.push(
-            PLACEHOLDER.LINE_TO_TRANSLATE,
-            PLACEHOLDER.CONTEXT_BEFORE,
-            PLACEHOLDER.CONTEXT_AFTER
-        )
-    }
-    return items
-})
-
 const aiPrompt = computed({
     get: () => (settingsStore.getSetting(SETTINGS.AI_PROMPT) as string) ?? '',
     set: (newValue: string) => {
@@ -102,6 +99,19 @@ const aiPrompt = computed({
             saveNotification.value?.show()
         }
     }
+})
+
+const systemPlaceholders = computed(() => {
+    const items = [PLACEHOLDER.SOURCE_LANGUAGE, PLACEHOLDER.TARGET_LANGUAGE]
+    if (useBatchTranslation.value !== 'true') {
+        items.push(
+            PLACEHOLDER.LINE_TO_TRANSLATE,
+            PLACEHOLDER.CONTEXT_BEFORE,
+            PLACEHOLDER.CONTEXT_AFTER,
+            PLACEHOLDER.CONTEXT_PAIRS_BEFORE
+        )
+    }
+    return items
 })
 
 const aiUserPrompt = computed({

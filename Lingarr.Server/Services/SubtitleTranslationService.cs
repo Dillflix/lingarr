@@ -1,6 +1,7 @@
 using Lingarr.Contracts.Exceptions;
 using Lingarr.Contracts.Models;
 using Lingarr.Contracts.Models.Batch;
+using Lingarr.Contracts.Translation;
 using Lingarr.Core.Entities;
 using Lingarr.Server.Extensions;
 using Lingarr.Server.Interfaces.Services;
@@ -103,6 +104,7 @@ public class SubtitleTranslationService
 
             var contextLinesBefore = BuildContext(subtitles, index, contextBefore, stripSubtitleFormatting, true);
             var contextLinesAfter = BuildContext(subtitles, index, contextAfter, stripSubtitleFormatting, false);
+            var contextPairsBefore = BuildTranslatedContextPairs(subtitles, index, contextBefore, stripSubtitleFormatting);
 
             var contentLines = stripSubtitleFormatting ? subtitle.PlaintextLines : subtitle.Lines;
             var subtitleLines = preserveLineBreaks && contentLines.Count > 1
@@ -133,7 +135,8 @@ public class SubtitleTranslationService
                     SourceLanguage = translationRequest.SourceLanguage,
                     TargetLanguage = translationRequest.TargetLanguage,
                     ContextLinesBefore = contextLinesBefore.Count > 0 ? contextLinesBefore : null,
-                    ContextLinesAfter = contextLinesAfter.Count > 0 ? contextLinesAfter : null
+                    ContextLinesAfter = contextLinesAfter.Count > 0 ? contextLinesAfter : null,
+                    ContextPairsBefore = contextPairsBefore.Count > 0 ? contextPairsBefore : null
                 }, cancellationToken);
                 translationCache[cacheKey] = result.Translation;
                 translatedLines.Add(result.Translation);
@@ -194,13 +197,22 @@ public class SubtitleTranslationService
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var translated = await candidate.Entry.Service.TranslateAsync(
-                    translateAbleSubtitle.SubtitleLine,
-                    candidate.Pair.Source,
-                    candidate.Pair.Target,
-                    translateAbleSubtitle.ContextLinesBefore,
-                    translateAbleSubtitle.ContextLinesAfter,
-                    cancellationToken);
+                var translated = candidate.Entry.Service is IContextualTranslationService contextualService
+                    ? await contextualService.TranslateWithContextAsync(
+                        translateAbleSubtitle.SubtitleLine,
+                        candidate.Pair.Source,
+                        candidate.Pair.Target,
+                        translateAbleSubtitle.ContextLinesBefore,
+                        translateAbleSubtitle.ContextLinesAfter,
+                        translateAbleSubtitle.ContextPairsBefore,
+                        cancellationToken)
+                    : await candidate.Entry.Service.TranslateAsync(
+                        translateAbleSubtitle.SubtitleLine,
+                        candidate.Pair.Source,
+                        candidate.Pair.Target,
+                        translateAbleSubtitle.ContextLinesBefore,
+                        translateAbleSubtitle.ContextLinesAfter,
+                        cancellationToken);
                 LogFallback(candidate, translateAbleSubtitle.SourceLanguage, translateAbleSubtitle.TargetLanguage);
                 return (translated, candidate.Entry.Name, candidate.Pair);
             }
@@ -520,6 +532,54 @@ public class SubtitleTranslationService
         }
 
         return context.Count > 0 ? context : [];
+    }
+
+    /// <summary>
+    /// Builds paired source/target history from the most recent completed subtitles.
+    /// Duplicate rendering layers at the same timestamp are ignored so they do not consume
+    /// the context budget used by translation-specialized models such as MiLMMT.
+    /// </summary>
+    private static List<TranslationContextPair> BuildTranslatedContextPairs(
+        List<SubtitleItem> subtitles,
+        int startIndex,
+        int count,
+        bool stripSubtitleFormatting)
+    {
+        if (count <= 0 || startIndex <= 0)
+        {
+            return [];
+        }
+
+        var pairs = new List<TranslationContextPair>(count);
+        var seen = new HashSet<string>();
+
+        for (var i = startIndex - 1; i >= 0 && pairs.Count < count; i--)
+        {
+            var contextSubtitle = subtitles[i];
+            if (contextSubtitle.TranslatedLines.Count == 0)
+            {
+                continue;
+            }
+
+            var source = string.Join(" ",
+                stripSubtitleFormatting ? contextSubtitle.PlaintextLines : contextSubtitle.Lines);
+            var target = string.Join(" ", contextSubtitle.TranslatedLines);
+            if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(target))
+            {
+                continue;
+            }
+
+            var key = $"{contextSubtitle.StartTime}|{contextSubtitle.EndTime}|{source}";
+            if (!seen.Add(key))
+            {
+                continue;
+            }
+
+            pairs.Add(new TranslationContextPair(source, target));
+        }
+
+        pairs.Reverse();
+        return pairs;
     }
 
     /// <summary>

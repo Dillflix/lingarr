@@ -28,12 +28,14 @@ export function useTemplatePreview(props: TemplatePreviewProps) {
             contextBefore: useBatchTranslation
                 ? ''
                 : 'What is the answer to the ultimate question?',
-            contextAfter: useBatchTranslation ? '' : 'That is not an answer we can work with.'
+            contextAfter: useBatchTranslation ? '' : 'That is not an answer we can work with.',
+            contextPairsBefore: useBatchTranslation
+                ? ''
+                : `${sourceLang}: What is the answer to the ultimate question?\n${targetLang}: Wat is het antwoord op de ultieme vraag?\n`
         }
 
         const prompt =
-            (settingsStore.getSetting(SETTINGS.AI_PROMPT) as string) ||
-            'Translate from {sourceLanguage} to {targetLanguage}'
+            (settingsStore.getSetting(SETTINGS.AI_PROMPT) as string) || ''
         const userPrompt =
             (settingsStore.getSetting(SETTINGS.AI_USER_PROMPT) as string) || '{lineToTranslate}'
 

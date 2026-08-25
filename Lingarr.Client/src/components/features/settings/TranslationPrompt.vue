@@ -16,7 +16,8 @@
                     :rows="10"
                     :min-height="100"
                     :placeholders="systemPlaceholders"
-                    :required-placeholders="systemRequiredPlaceholders"
+                    :required-placeholders="['{sourceLanguage}', '{targetLanguage}']"
+                    allow-empty
                     @update:validation="(val) => (isSystemPromptValid = val)" />
 
                 <div v-if="useBatchTranslation !== 'true'" class="space-y-4">
@@ -99,10 +100,6 @@ const aiPrompt = computed({
         }
     }
 })
-
-const systemRequiredPlaceholders = computed(() =>
-    aiPrompt.value.trim().length === 0 ? [] : ['{sourceLanguage}', '{targetLanguage}']
-)
 
 const systemPlaceholders = computed(() => {
     const items = [PLACEHOLDER.SOURCE_LANGUAGE, PLACEHOLDER.TARGET_LANGUAGE]

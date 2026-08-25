@@ -15,13 +15,15 @@ public sealed class ResegmentationController : ControllerBase
 {
     private readonly ITranslationUnitResegmentationService _resegmentationService;
     private readonly IResegmentationBenchmarkService _benchmarkService;
+    private readonly ResegmentationBenchmarkHistoryHarvester _historyHarvester;
 
     public ResegmentationController(
         ITranslationUnitResegmentationService resegmentationService,
         LingarrDbContext dbContext,
         ISettingService settings,
         IHttpClientFactory httpClientFactory,
-        ILogger<ResegmentationBenchmarkService> benchmarkLogger)
+        ILogger<ResegmentationBenchmarkService> benchmarkLogger,
+        ILogger<ResegmentationBenchmarkHistoryHarvester> harvesterLogger)
     {
         _resegmentationService = resegmentationService;
         _benchmarkService = new ResegmentationBenchmarkService(
@@ -30,6 +32,10 @@ public sealed class ResegmentationController : ControllerBase
             resegmentationService,
             httpClientFactory,
             benchmarkLogger);
+        _historyHarvester = new ResegmentationBenchmarkHistoryHarvester(
+            dbContext,
+            settings,
+            harvesterLogger);
     }
 
     /// <summary>
@@ -64,12 +70,30 @@ public sealed class ResegmentationController : ControllerBase
     }
 
     /// <summary>
-    /// Returns the number of automatically captured multi-cue translation units available for
+    /// Returns the number of locally captured/harvested multi-cue translation units available for
     /// reference-free benchmarking.
     /// </summary>
     [HttpGet("benchmark/count")]
     public async Task<ActionResult<int>> BenchmarkCount(CancellationToken cancellationToken) =>
         Ok(await _benchmarkService.CountSamplesAsync(cancellationToken));
+
+    /// <summary>
+    /// Reconstructs multi-cue translation units from recently completed Lingarr translations.
+    /// No target-language reference annotation is needed: final per-cue targets are concatenated
+    /// back into the complete translation unit and deduplicated into the local benchmark corpus.
+    /// </summary>
+    [HttpPost("benchmark/harvest")]
+    public async Task<ActionResult<ResegmentationBenchmarkHarvestResult>> HarvestBenchmarkSamples(
+        [FromQuery] int maxRequests = 100,
+        CancellationToken cancellationToken = default)
+    {
+        if (maxRequests <= 0)
+        {
+            return BadRequest("maxRequests must be greater than zero.");
+        }
+
+        return Ok(await _historyHarvester.HarvestAsync(maxRequests, cancellationToken));
+    }
 
     /// <summary>
     /// Returns recently captured multi-cue translation units. These samples contain source timing
@@ -102,6 +126,8 @@ public sealed class ResegmentationController : ControllerBase
     /// models are compared blindly against the deterministic baseline by multiple judges. Optional
     /// backtranslation produces source-language same-slot/cross-slot metrics, and adversarially
     /// shifted boundaries measure whether each judge can detect obviously degraded segmentation.
+    /// By default the runner first harvests recent completed translations, so no manually prepared
+    /// corpus or Danish-language annotation is required.
     /// </summary>
     [HttpPost("benchmark/run")]
     public async Task<ActionResult<ResegmentationBenchmarkRunResult>> RunBenchmark(
@@ -132,6 +158,24 @@ public sealed class ResegmentationController : ControllerBase
             return BadRequest("The backtranslation model requires an endpoint and model name.");
         }
 
-        return Ok(await _benchmarkService.RunAsync(request, cancellationToken));
+        ResegmentationBenchmarkHarvestResult? harvest = null;
+        if (request.AutoHarvest)
+        {
+            harvest = await _historyHarvester.HarvestAsync(
+                Math.Clamp(request.HarvestRequestLimit, 1, 1000),
+                cancellationToken);
+        }
+
+        var result = await _benchmarkService.RunAsync(request, cancellationToken);
+        return Ok(new ResegmentationBenchmarkRunResult
+        {
+            SampleCount = result.SampleCount,
+            Harvest = harvest,
+            DeterministicBaseline = result.DeterministicBaseline,
+            Candidates = result.Candidates,
+            Judges = result.Judges,
+            Samples = result.Samples,
+            Warnings = result.Warnings
+        });
     }
 }

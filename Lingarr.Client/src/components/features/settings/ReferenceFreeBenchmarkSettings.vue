@@ -2,22 +2,32 @@
     <CardComponent title="Reference-free resegmentation benchmark">
         <template #description>
             Benchmark alignment models on real multi-cue translation units without creating Danish gold labels.
-            Lingarr can harvest completed translations automatically, use blind multilingual judges, sanity-check
-            those judges with deliberately shifted boundaries, and optionally backtranslate each candidate into
-            the source language for an independent same-slot/cross-slot signal.
+            New sentence-aware translations are captured automatically at the exact point after whole-unit
+            translation and before any resegmentation. Blind multilingual judges, adversarial boundary checks,
+            and optional backtranslation provide independent evaluation signals without requiring Danish fluency.
         </template>
         <template #content>
             <div class="flex flex-col space-y-5">
+                <div class="rounded-md border border-green-500/30 p-3 text-sm">
+                    <span class="font-semibold">Preferred corpus source:</span>
+                    multi-cue units from new translation jobs are recorded automatically before resegmentation, so
+                    the corpus contains the exact source timing slots and exact complete model translation.
+                    <span class="text-secondary-content/60">
+                        History harvesting below is only a bootstrap option; older jobs may predate sentence-aware
+                        translation and therefore are less reliable benchmark material.
+                    </span>
+                </div>
+
                 <div class="grid gap-3 md:grid-cols-4">
                     <div class="border-accent/30 rounded-md border p-3">
                         <div class="text-secondary-content/60 text-xs">Corpus samples</div>
                         <div class="text-xl font-semibold">{{ corpusCount }}</div>
                     </div>
                     <InputComponent v-model="sampleLimit" label="Samples per run" />
-                    <InputComponent v-model="harvestRequestLimit" label="Translation jobs to scan" />
+                    <InputComponent v-model="harvestRequestLimit" label="Historical jobs to scan" />
                     <div class="flex items-end gap-2">
                         <button type="button" class="btn btn-secondary" :disabled="busy" @click="harvest">
-                            Harvest now
+                            Harvest history
                         </button>
                         <button type="button" class="btn btn-ghost" :disabled="busy" @click="refreshCount">
                             Refresh
@@ -71,7 +81,7 @@
                 <div class="flex flex-wrap items-center gap-5">
                     <label class="flex items-center gap-2 text-sm">
                         <input v-model="autoHarvest" type="checkbox" class="checkbox checkbox-sm" />
-                        Auto-harvest before benchmark
+                        Also harvest historical jobs before benchmark
                     </label>
                     <label class="flex items-center gap-2 text-sm">
                         <input v-model="includeAdversarial" type="checkbox" class="checkbox checkbox-sm" />
@@ -87,8 +97,8 @@
 
                 <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
                 <p v-if="harvestResult" class="text-secondary-content/70 text-sm">
-                    Harvest scanned {{ harvestResult.requestsScanned }} completed translation jobs, found
-                    {{ harvestResult.multiCueUnitsFound }} multi-cue units, captured
+                    History harvest scanned {{ harvestResult.requestsScanned }} completed translation jobs, found
+                    {{ harvestResult.multiCueUnitsFound }} possible multi-cue units, captured
                     {{ harvestResult.newSamplesCaptured }} new samples; corpus total:
                     {{ harvestResult.totalCorpusSamples }}.
                 </p>
@@ -200,7 +210,7 @@ import MetricCard from '@/components/common/MetricCard.vue'
 const corpusCount = ref(0)
 const sampleLimit = ref('50')
 const harvestRequestLimit = ref('100')
-const autoHarvest = ref(true)
+const autoHarvest = ref(false)
 const includeAdversarial = ref(true)
 const candidateModelsJson = ref('')
 const judgeModelsJson = ref('')

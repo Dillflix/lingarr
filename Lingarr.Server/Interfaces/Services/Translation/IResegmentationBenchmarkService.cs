@@ -8,10 +8,6 @@ public interface IResegmentationBenchmarkService
         ResegmentationBenchmarkCaptureRequest request,
         CancellationToken cancellationToken);
 
-    Task<ResegmentationBenchmarkHarvestResult> HarvestFromTranslationHistoryAsync(
-        int maxRequests,
-        CancellationToken cancellationToken);
-
     Task<int> CountSamplesAsync(CancellationToken cancellationToken);
 
     Task<IReadOnlyList<ResegmentationBenchmarkSampleView>> GetSamplesAsync(

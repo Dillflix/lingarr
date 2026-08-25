@@ -28,6 +28,16 @@ export const SETTINGS = {
     AI_USER_PROMPT: 'ai_user_prompt',
     PROOFREAD_PROMPT: 'proofread_prompt',
     PROOFREAD_USER_PROMPT: 'proofread_user_prompt',
+    RESEGMENTATION_MODE: 'resegmentation_mode',
+    RESEGMENTATION_ENDPOINT: 'resegmentation_endpoint',
+    RESEGMENTATION_MODEL: 'resegmentation_model',
+    RESEGMENTATION_SYSTEM_PROMPT: 'resegmentation_system_prompt',
+    RESEGMENTATION_USER_PROMPT: 'resegmentation_user_prompt',
+    RESEGMENTATION_TIMEOUT_SECONDS: 'resegmentation_timeout_seconds',
+    RESEGMENTATION_VALIDATOR_ENDPOINT: 'resegmentation_validator_endpoint',
+    RESEGMENTATION_VALIDATOR_MODEL: 'resegmentation_validator_model',
+    RESEGMENTATION_VALIDATOR_SYSTEM_PROMPT: 'resegmentation_validator_system_prompt',
+    RESEGMENTATION_VALIDATOR_USER_PROMPT: 'resegmentation_validator_user_prompt',
     THEME: 'theme',
     LOCALE: 'locale',
     MOVIE_AGE_THRESHOLD: 'movie_age_threshold',
@@ -98,6 +108,16 @@ export interface ISettings {
     ai_user_prompt: string
     proofread_prompt: string
     proofread_user_prompt: string
+    resegmentation_mode: string
+    resegmentation_endpoint: string
+    resegmentation_model: string
+    resegmentation_system_prompt: string
+    resegmentation_user_prompt: string
+    resegmentation_timeout_seconds: string
+    resegmentation_validator_endpoint: string
+    resegmentation_validator_model: string
+    resegmentation_validator_system_prompt: string
+    resegmentation_validator_user_prompt: string
     movie_age_threshold: string
     show_age_threshold: string
     fix_overlapping_subtitles: string
@@ -155,6 +175,8 @@ export const ENCRYPTED_SETTINGS = {
     DEEPL_API_KEY: 'deepl_api_key',
     LIBRETRANSLATE_API_KEY: 'libretranslate_api_key',
     LOCAL_AI_API_KEY: 'local_ai_api_key',
+    RESEGMENTATION_API_KEY: 'resegmentation_api_key',
+    RESEGMENTATION_VALIDATOR_API_KEY: 'resegmentation_validator_api_key'
 } as const
 
 export interface IEncryptedSettings {
@@ -170,6 +192,8 @@ export interface IEncryptedSettings {
     deepl_api_key: string
     libretranslate_api_key: string
     local_ai_api_key: string
+    resegmentation_api_key: string
+    resegmentation_validator_api_key: string
 }
 
 export const SERVICE_TYPE = {

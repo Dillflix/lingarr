@@ -42,18 +42,21 @@ public sealed class SentenceAwareTranslationUnitService
     private readonly IProgressService _progressService;
     private readonly ILogger _logger;
     private readonly ITranslationUnitResegmentationService? _resegmentationService;
+    private readonly IResegmentationBenchmarkService? _benchmarkService;
     private int _lastProgression = -1;
 
     public SentenceAwareTranslationUnitService(
         SubtitleTranslationService translator,
         IProgressService progressService,
         ILogger logger,
-        ITranslationUnitResegmentationService? resegmentationService = null)
+        ITranslationUnitResegmentationService? resegmentationService = null,
+        IResegmentationBenchmarkService? benchmarkService = null)
     {
         _translator = translator;
         _progressService = progressService;
         _logger = logger;
         _resegmentationService = resegmentationService;
+        _benchmarkService = benchmarkService;
     }
 
     /// <summary>
@@ -126,6 +129,41 @@ public sealed class SentenceAwareTranslationUnitService
             var translatedUnit = stripSubtitleFormatting
                 ? SubtitleFormatterService.RemoveMarkup(result.Translation)
                 : result.Translation;
+
+            // Capture the exact translation-unit input/output before any segmentation algorithm is
+            // applied. This is the highest-fidelity reference-free benchmark sample: unlike history
+            // reconstruction, it cannot accidentally include legacy per-cue translations or already
+            // resegmented output. Benchmark capture is observational and must never break translation.
+            if (_benchmarkService is not null && sourceSegments.Count > 1)
+            {
+                try
+                {
+                    await _benchmarkService.CaptureAsync(
+                        new ResegmentationBenchmarkCaptureRequest
+                        {
+                            SourceLanguage = translationRequest.SourceLanguage,
+                            TargetLanguage = translationRequest.TargetLanguage,
+                            SourceSegments = sourceSegments,
+                            TranslatedUnit = translatedUnit,
+                            TranslationRequestId = translationRequest.Id,
+                            StartPosition = unit[0].Representative.Position,
+                            EndPosition = unit[^1].Representative.Position
+                        },
+                        cancellationToken);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "Failed to capture reference-free benchmark sample for translation unit {StartPosition}-{EndPosition}; translation will continue.",
+                        unit[0].Representative.Position,
+                        unit[^1].Representative.Position);
+                }
+            }
 
             IReadOnlyList<string> targetSegments;
             if (_resegmentationService is null || sourceSegments.Count <= 1)

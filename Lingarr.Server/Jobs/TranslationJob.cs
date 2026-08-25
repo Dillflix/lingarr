@@ -20,6 +20,7 @@ namespace Lingarr.Server.Jobs;
 public class TranslationJob
 {
     private readonly ILogger<TranslationJob> _logger;
+    private readonly ILogger<ResegmentationBenchmarkService> _benchmarkLogger;
     private readonly ISettingService _settings;
     private readonly LingarrDbContext _dbContext;
     private readonly IProgressService _progressService;
@@ -30,9 +31,11 @@ public class TranslationJob
     private readonly ITranslationUnitResegmentationService _resegmentationService;
     private readonly ITranslationRequestService _translationRequestService;
     private readonly ITranslationRequestEventService _eventService;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     public TranslationJob(
         ILogger<TranslationJob> logger,
+        ILogger<ResegmentationBenchmarkService> benchmarkLogger,
         ISettingService settings,
         LingarrDbContext dbContext,
         IProgressService progressService,
@@ -42,9 +45,11 @@ public class TranslationJob
         ITranslationServiceFactory translationServiceFactory,
         ITranslationUnitResegmentationService resegmentationService,
         ITranslationRequestService translationRequestService,
-        ITranslationRequestEventService eventService)
+        ITranslationRequestEventService eventService,
+        IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
+        _benchmarkLogger = benchmarkLogger;
         _settings = settings;
         _dbContext = dbContext;
         _progressService = progressService;
@@ -55,6 +60,7 @@ public class TranslationJob
         _resegmentationService = resegmentationService;
         _translationRequestService = translationRequestService;
         _eventService = eventService;
+        _httpClientFactory = httpClientFactory;
     }
 
     [AutomaticRetry(Attempts = 0)]
@@ -228,11 +234,22 @@ public class TranslationJob
                         contextBefore, contextAfter);
                 }
 
+                // Capture the exact source-segment list and complete translation before any target
+                // resegmentation. The benchmark service is observational; its capture failures are
+                // isolated inside SentenceAwareTranslationUnitService and cannot fail translation.
+                var benchmarkService = new ResegmentationBenchmarkService(
+                    _dbContext,
+                    _settings,
+                    _resegmentationService,
+                    _httpClientFactory,
+                    _benchmarkLogger);
+
                 var sentenceAwareTranslator = new SentenceAwareTranslationUnitService(
                     translator,
                     _progressService,
                     _logger,
-                    _resegmentationService);
+                    _resegmentationService,
+                    benchmarkService);
 
                 translatedSubtitles = await sentenceAwareTranslator.TranslateSubtitles(
                     subtitles,

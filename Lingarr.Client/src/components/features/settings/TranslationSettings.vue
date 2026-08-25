@@ -91,7 +91,10 @@
             </template>
         </CardComponent>
 
-        <ResegmentationSettings v-if="useBatchTranslation !== 'true'" />
+        <template v-if="useBatchTranslation !== 'true'">
+            <ResegmentationSettings />
+            <ReferenceFreeBenchmarkSettings />
+        </template>
     </div>
 </template>
 
@@ -104,6 +107,7 @@ import SaveNotification from '@/components/common/SaveNotification.vue'
 import InputComponent from '@/components/common/InputComponent.vue'
 import ToggleButton from '@/components/common/ToggleButton.vue'
 import ResegmentationSettings from '@/components/features/settings/ResegmentationSettings.vue'
+import ReferenceFreeBenchmarkSettings from '@/components/features/settings/ReferenceFreeBenchmarkSettings.vue'
 
 const saveNotification = ref<InstanceType<typeof SaveNotification> | null>(null)
 const settingsStore = useSettingStore()

@@ -19,7 +19,8 @@ import {
     IPluginSummary,
     IProofreadLineApplyRequest,
     IProofreadLineRequest,
-    IResegmentationEvaluationRequest
+    IResegmentationEvaluationRequest,
+    IResegmentationBenchmarkRunRequest
 } from '@/ts'
 
 export interface Services {
@@ -169,4 +170,8 @@ export interface IRequestTemplateService {
 
 export interface IResegmentationService {
     evaluate<T>(request: IResegmentationEvaluationRequest): Promise<T>
+    benchmarkCount(): Promise<number>
+    harvestBenchmark<T>(maxRequests?: number): Promise<T>
+    runBenchmark<T>(request: IResegmentationBenchmarkRunRequest): Promise<T>
+    clearBenchmarkSamples(): Promise<number>
 }

@@ -57,6 +57,8 @@ public static class SettingKeys
             public const string ValidatorApiKey = "resegmentation_validator_api_key";
             public const string ValidatorSystemPrompt = "resegmentation_validator_system_prompt";
             public const string ValidatorUserPrompt = "resegmentation_validator_user_prompt";
+            public const string BenchmarkCaptureEnabled = "resegmentation_benchmark_capture_enabled";
+            public const string BenchmarkMaxSamples = "resegmentation_benchmark_max_samples";
         }
 
         public static class DeepL

@@ -16,7 +16,7 @@
                     :rows="10"
                     :min-height="100"
                     :placeholders="systemPlaceholders"
-                    :required-placeholders="[]"
+                    :required-placeholders="systemRequiredPlaceholders"
                     @update:validation="(val) => (isSystemPromptValid = val)" />
 
                 <div v-if="useBatchTranslation !== 'true'" class="space-y-4">
@@ -90,6 +90,20 @@ const useBatchTranslation = computed(
     () => settingsStore.getSetting(SETTINGS.USE_BATCH_TRANSLATION) as string
 )
 
+const aiPrompt = computed({
+    get: () => (settingsStore.getSetting(SETTINGS.AI_PROMPT) as string) ?? '',
+    set: (newValue: string) => {
+        settingsStore.updateSetting(SETTINGS.AI_PROMPT, newValue, isSystemPromptValid.value)
+        if (isSystemPromptValid.value) {
+            saveNotification.value?.show()
+        }
+    }
+})
+
+const systemRequiredPlaceholders = computed(() =>
+    aiPrompt.value.trim().length === 0 ? [] : ['{sourceLanguage}', '{targetLanguage}']
+)
+
 const systemPlaceholders = computed(() => {
     const items = [PLACEHOLDER.SOURCE_LANGUAGE, PLACEHOLDER.TARGET_LANGUAGE]
     if (useBatchTranslation.value !== 'true') {
@@ -101,16 +115,6 @@ const systemPlaceholders = computed(() => {
         )
     }
     return items
-})
-
-const aiPrompt = computed({
-    get: () => (settingsStore.getSetting(SETTINGS.AI_PROMPT) as string) ?? '',
-    set: (newValue: string) => {
-        settingsStore.updateSetting(SETTINGS.AI_PROMPT, newValue, isSystemPromptValid.value)
-        if (isSystemPromptValid.value) {
-            saveNotification.value?.show()
-        }
-    }
 })
 
 const aiUserPrompt = computed({

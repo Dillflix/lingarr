@@ -16,6 +16,7 @@ public class LingarrDbContext : DbContext
     public DbSet<TranslationRequest> TranslationRequests { get; set; }
     public DbSet<TranslationRequestEvent> TranslationRequestEvents { get; set; }
     public DbSet<TranslationRequestLine> TranslationRequestLines { get; set; }
+    public DbSet<ResegmentationBenchmarkSample> ResegmentationBenchmarkSamples { get; set; }
     public DbSet<PathMapping> PathMappings { get; set; }
     public DbSet<Statistics> Statistics { get; set; }
     public DbSet<DailyStatistics> DailyStatistics { get; set; }

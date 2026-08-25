@@ -18,7 +18,8 @@ import {
     IPluginStatus,
     IPluginSummary,
     IProofreadLineApplyRequest,
-    IProofreadLineRequest
+    IProofreadLineRequest,
+    IResegmentationEvaluationRequest
 } from '@/ts'
 
 export interface Services {
@@ -37,6 +38,7 @@ export interface Services {
     telemetry: ITelemetryService
     requestTemplate: IRequestTemplateService
     plugin: IPluginService
+    resegmentation: IResegmentationService
 }
 
 export interface IPluginService {
@@ -163,4 +165,8 @@ export interface ITelemetryService {
 
 export interface IRequestTemplateService {
     getDefaults<T>(): Promise<T>
+}
+
+export interface IResegmentationService {
+    evaluate<T>(request: IResegmentationEvaluationRequest): Promise<T>
 }

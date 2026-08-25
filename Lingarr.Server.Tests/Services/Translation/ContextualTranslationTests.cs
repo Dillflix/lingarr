@@ -8,6 +8,7 @@ using Lingarr.Core.Entities;
 using Lingarr.Core.Enum;
 using Lingarr.Server.Interfaces.Services;
 using Lingarr.Server.Models;
+using Lingarr.Server.Models.FileSystem;
 using Lingarr.Server.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;

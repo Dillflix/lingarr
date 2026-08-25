@@ -4,7 +4,6 @@ using Lingarr.Core.Entities;
 using Lingarr.Core.Enum;
 using Lingarr.Server.Interfaces.Services;
 using Lingarr.Server.Models;
-using Lingarr.Server.Models.FileSystem;
 using Lingarr.Server.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -21,9 +20,9 @@ public class ContextualTranslationTests
         var service = CreateService(provider);
         var subtitles = new List<SubtitleItem>
         {
-            Subtitle(1, 1000, 2000, "one"),
-            Subtitle(2, 3000, 4000, "two"),
-            Subtitle(3, 5000, 6000, "three")
+            Subtitle(1, "one"),
+            Subtitle(2, "two"),
+            Subtitle(3, "three")
         };
 
         await service.TranslateSubtitles(
@@ -53,9 +52,9 @@ public class ContextualTranslationTests
         var service = CreateService(provider);
         var subtitles = new List<SubtitleItem>
         {
-            Subtitle(1, 1000, 2000, "hello"),
-            Subtitle(2, 1000, 2000, "hello"),
-            Subtitle(3, 3000, 4000, "next")
+            Subtitle(1, "hello"),
+            Subtitle(2, "hello"),
+            Subtitle(3, "next")
         };
 
         await service.TranslateSubtitles(
@@ -67,9 +66,8 @@ public class ContextualTranslationTests
             contextAfter: 0,
             CancellationToken.None);
 
-        // The duplicate second subtitle is served by Lingarr's per-file cache, so the
-        // provider sees requests for "hello" and "next" only. The history for "next"
-        // contains one unique source/target pair rather than consuming both context slots.
+        // Identical stacked subtitle layers use the same default timestamps in this fixture,
+        // matching the cache/deduplication identity used by the translation service.
         Assert.Equal(2, provider.SeenPairs.Count);
         var nextContext = provider.SeenPairs[1];
         Assert.NotNull(nextContext);
@@ -84,8 +82,8 @@ public class ContextualTranslationTests
         var service = CreateService(provider);
         var subtitles = new List<SubtitleItem>
         {
-            Subtitle(1, 1000, 2000, "one"),
-            Subtitle(2, 3000, 4000, "two")
+            Subtitle(1, "one"),
+            Subtitle(2, "two")
         };
 
         await service.TranslateSubtitles(
@@ -129,11 +127,9 @@ public class ContextualTranslationTests
         Status = TranslationStatus.InProgress
     };
 
-    private static SubtitleItem Subtitle(int position, long start, long end, string text) => new()
+    private static SubtitleItem Subtitle(int position, string text) => new()
     {
         Position = position,
-        StartTime = start,
-        EndTime = end,
         Lines = [text],
         PlaintextLines = [text]
     };

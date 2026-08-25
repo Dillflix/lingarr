@@ -54,10 +54,19 @@ public sealed class ResegmentationBenchmarkRunRequest
 public sealed class ResegmentationBenchmarkRunResult
 {
     public required int SampleCount { get; init; }
+    public required ResegmentationBenchmarkBaselineSummary DeterministicBaseline { get; init; }
     public required IReadOnlyList<ResegmentationBenchmarkCandidateSummary> Candidates { get; init; }
     public required IReadOnlyList<ResegmentationBenchmarkJudgeSummary> Judges { get; init; }
     public required IReadOnlyList<ResegmentationBenchmarkSampleResult> Samples { get; init; }
     public IReadOnlyList<string> Warnings { get; init; } = [];
+}
+
+public sealed class ResegmentationBenchmarkBaselineSummary
+{
+    public int BacktranslationSamples { get; init; }
+    public double? MeanSameSlotTokenF1Percent { get; init; }
+    public double? MeanCrossSlotMarginPercentagePoints { get; init; }
+    public double? CrossSlotLeakagePercent { get; init; }
 }
 
 public sealed class ResegmentationBenchmarkCandidateSummary
@@ -100,6 +109,7 @@ public sealed class ResegmentationBenchmarkSampleResult
     public required IReadOnlyList<string> SourceSegments { get; init; }
     public required string TranslatedUnit { get; init; }
     public required IReadOnlyList<string> DeterministicSegments { get; init; }
+    public ResegmentationBacktranslationMetrics? DeterministicBacktranslation { get; init; }
     public required IReadOnlyList<ResegmentationBenchmarkCandidateResult> Candidates { get; init; }
 }
 

@@ -1,7 +1,7 @@
 <template>
     <CardComponent title="Translation Prompt">
         <template #description>
-            Define the prompts used when translating subtitle lines.
+            Define the prompts used when translating subtitle translation units.
         </template>
         <template #content>
             <div class="flex flex-col space-y-4">
@@ -23,9 +23,15 @@
                 <div v-if="useBatchTranslation !== 'true'" class="space-y-4">
                     <div class="flex flex-col space-x-2">
                         <span class="font-semibold">Translation user prompt</span>
-                        Use context placeholders to include surrounding source lines. Use translated
-                        context pairs to include already completed source/target pairs, which can
-                        improve consistency and disambiguation for translation-specialized models.
+                        Lingarr automatically combines subtitle fragments that belong to the same
+                        sentence or utterance. <code>{lineToTranslate}</code> therefore contains the
+                        complete translation unit, whether that unit spans one cue or several cues.
+                    </div>
+                    <div class="border-accent/30 bg-accent/5 rounded-md border p-3 text-xs">
+                        Do not add <code>{contextBefore}</code>, <code>{contextAfter}</code>, or
+                        <code>{contextPairsBefore}</code> to this prompt. Sentence-aware translation
+                        sends only text that should actually be translated, then resegments the
+                        translated unit back onto the original subtitle timings.
                     </div>
                     <TextAreaComponent
                         v-model="aiUserPrompt"
@@ -34,31 +40,10 @@
                         :placeholders="[
                             PLACEHOLDER.LINE_TO_TRANSLATE,
                             PLACEHOLDER.SOURCE_LANGUAGE,
-                            PLACEHOLDER.TARGET_LANGUAGE,
-                            PLACEHOLDER.CONTEXT_BEFORE,
-                            PLACEHOLDER.CONTEXT_AFTER,
-                            PLACEHOLDER.CONTEXT_PAIRS_BEFORE
+                            PLACEHOLDER.TARGET_LANGUAGE
                         ]"
                         :required-placeholders="['{lineToTranslate}']"
                         @update:validation="(val) => (isUserPromptValid = val)" />
-
-                    <InputComponent
-                        v-model="contextBefore"
-                        :type="INPUT_TYPE.NUMBER"
-                        :validation-type="INPUT_VALIDATION_TYPE.NUMBER"
-                        label="Context before"
-                        @update:validation="(val) => (isValid.contextBefore = val)" />
-                    <p class="text-secondary-content/60 text-xs">
-                        This count controls both {contextBefore} source-only history and
-                        {contextPairsBefore} completed source/target history. Translated pair history
-                        automatically skips duplicate subtitle rendering layers.
-                    </p>
-                    <InputComponent
-                        v-model="contextAfter"
-                        :type="INPUT_TYPE.NUMBER"
-                        :validation-type="INPUT_VALIDATION_TYPE.NUMBER"
-                        label="Context after"
-                        @update:validation="(val) => (isValid.contextAfter = val)" />
                 </div>
                 <div v-else class="text-xs">
                     The user prompt is not applied when sending subtitles in batch; the subtitle
@@ -70,22 +55,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useSettingStore } from '@/store/setting'
-import { INPUT_TYPE, INPUT_VALIDATION_TYPE, PLACEHOLDER, SETTINGS } from '@/ts'
+import { PLACEHOLDER, SETTINGS } from '@/ts'
 import CardComponent from '@/components/common/CardComponent.vue'
 import TextAreaComponent from '@/components/common/TextAreaComponent.vue'
-import InputComponent from '@/components/common/InputComponent.vue'
 import SaveNotification from '@/components/common/SaveNotification.vue'
 
 const settingsStore = useSettingStore()
 const saveNotification = ref<InstanceType<typeof SaveNotification> | null>(null)
 const isSystemPromptValid = ref(true)
 const isUserPromptValid = ref(false)
-const isValid = reactive({
-    contextBefore: true,
-    contextAfter: true
-})
 
 const useBatchTranslation = computed(
     () => settingsStore.getSetting(SETTINGS.USE_BATCH_TRANSLATION) as string
@@ -104,12 +84,7 @@ const aiPrompt = computed({
 const systemPlaceholders = computed(() => {
     const items = [PLACEHOLDER.SOURCE_LANGUAGE, PLACEHOLDER.TARGET_LANGUAGE]
     if (useBatchTranslation.value !== 'true') {
-        items.push(
-            PLACEHOLDER.LINE_TO_TRANSLATE,
-            PLACEHOLDER.CONTEXT_BEFORE,
-            PLACEHOLDER.CONTEXT_AFTER,
-            PLACEHOLDER.CONTEXT_PAIRS_BEFORE
-        )
+        items.push(PLACEHOLDER.LINE_TO_TRANSLATE)
     }
     return items
 })
@@ -119,26 +94,6 @@ const aiUserPrompt = computed({
     set: (newValue: string) => {
         settingsStore.updateSetting(SETTINGS.AI_USER_PROMPT, newValue, isUserPromptValid.value)
         if (isUserPromptValid.value) {
-            saveNotification.value?.show()
-        }
-    }
-})
-
-const contextBefore = computed({
-    get: () => settingsStore.getSetting(SETTINGS.AI_CONTEXT_BEFORE) as string,
-    set: (newValue: string) => {
-        settingsStore.updateSetting(SETTINGS.AI_CONTEXT_BEFORE, newValue, isValid.contextBefore)
-        if (isValid.contextBefore) {
-            saveNotification.value?.show()
-        }
-    }
-})
-
-const contextAfter = computed({
-    get: () => settingsStore.getSetting(SETTINGS.AI_CONTEXT_AFTER) as string,
-    set: (newValue: string) => {
-        settingsStore.updateSetting(SETTINGS.AI_CONTEXT_AFTER, newValue, isValid.contextAfter)
-        if (isValid.contextAfter) {
             saveNotification.value?.show()
         }
     }

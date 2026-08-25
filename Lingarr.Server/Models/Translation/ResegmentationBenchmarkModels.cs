@@ -14,6 +14,14 @@ public sealed class ResegmentationBenchmarkCaptureRequest
     public int? EndPosition { get; init; }
 }
 
+public sealed class ResegmentationBenchmarkHarvestResult
+{
+    public required int RequestsScanned { get; init; }
+    public required int MultiCueUnitsFound { get; init; }
+    public required int NewSamplesCaptured { get; init; }
+    public required int TotalCorpusSamples { get; init; }
+}
+
 public sealed class ResegmentationBenchmarkSampleView
 {
     public required int Id { get; init; }
@@ -49,11 +57,14 @@ public sealed class ResegmentationBenchmarkRunRequest
     public IReadOnlyList<NamedBenchmarkModel> JudgeModels { get; init; } = [];
     public NamedBenchmarkModel? BacktranslationModel { get; init; }
     public bool IncludeAdversarialCalibration { get; init; } = true;
+    public bool AutoHarvest { get; init; } = true;
+    public int HarvestRequestLimit { get; init; } = 100;
 }
 
 public sealed class ResegmentationBenchmarkRunResult
 {
     public required int SampleCount { get; init; }
+    public ResegmentationBenchmarkHarvestResult? Harvest { get; init; }
     public required ResegmentationBenchmarkBaselineSummary DeterministicBaseline { get; init; }
     public required IReadOnlyList<ResegmentationBenchmarkCandidateSummary> Candidates { get; init; }
     public required IReadOnlyList<ResegmentationBenchmarkJudgeSummary> Judges { get; init; }

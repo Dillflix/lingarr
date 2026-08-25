@@ -57,7 +57,9 @@ public sealed class ResegmentationBenchmarkRunRequest
     public IReadOnlyList<NamedBenchmarkModel> JudgeModels { get; init; } = [];
     public NamedBenchmarkModel? BacktranslationModel { get; init; }
     public bool IncludeAdversarialCalibration { get; init; } = true;
-    public bool AutoHarvest { get; init; } = true;
+    // History harvesting is an optional bootstrap mechanism. Exact live samples captured before
+    // resegmentation are preferred because legacy translation history may predate sentence-aware units.
+    public bool AutoHarvest { get; init; } = false;
     public int HarvestRequestLimit { get; init; } = 100;
 }
 

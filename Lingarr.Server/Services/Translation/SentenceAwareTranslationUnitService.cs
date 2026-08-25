@@ -2,14 +2,18 @@ using Lingarr.Contracts.Models;
 using Lingarr.Core.Entities;
 using Lingarr.Server.Extensions;
 using Lingarr.Server.Interfaces.Services;
+using Lingarr.Server.Interfaces.Services.Translation;
 using Lingarr.Server.Models.FileSystem;
+using Lingarr.Server.Models.Translation;
 using Lingarr.Server.Services.Subtitle;
 
 namespace Lingarr.Server.Services.Translation;
 
 /// <summary>
 /// Groups subtitle cues into complete linguistic translation units, translates each unit once,
-/// and deterministically resegments the translated text back onto the original cue timings.
+/// and resegments the translated text back onto the original cue timings. Resegmentation can use
+/// a dedicated model and independent validator, while retaining deterministic splitting as a
+/// baseline and fail-safe.
 /// A one-cue unit is the normal trivial case; multi-cue units are formed only when adjacent
 /// subtitle text strongly indicates that a sentence or utterance continues across cue boundaries.
 /// </summary>
@@ -37,16 +41,19 @@ public sealed class SentenceAwareTranslationUnitService
     private readonly SubtitleTranslationService _translator;
     private readonly IProgressService _progressService;
     private readonly ILogger _logger;
+    private readonly ITranslationUnitResegmentationService? _resegmentationService;
     private int _lastProgression = -1;
 
     public SentenceAwareTranslationUnitService(
         SubtitleTranslationService translator,
         IProgressService progressService,
-        ILogger logger)
+        ILogger logger,
+        ITranslationUnitResegmentationService? resegmentationService = null)
     {
         _translator = translator;
         _progressService = progressService;
         _logger = logger;
+        _resegmentationService = resegmentationService;
     }
 
     /// <summary>
@@ -119,7 +126,32 @@ public sealed class SentenceAwareTranslationUnitService
             var translatedUnit = stripSubtitleFormatting
                 ? SubtitleFormatterService.RemoveMarkup(result.Translation)
                 : result.Translation;
-            var targetSegments = ResegmentTranslation(translatedUnit, sourceSegments);
+
+            IReadOnlyList<string> targetSegments;
+            if (_resegmentationService is null || sourceSegments.Count <= 1)
+            {
+                targetSegments = ResegmentTranslation(translatedUnit, sourceSegments);
+            }
+            else
+            {
+                var resegmentation = await _resegmentationService.ResegmentAsync(
+                    new TranslationUnitResegmentationRequest
+                    {
+                        SourceLanguage = translationRequest.SourceLanguage,
+                        TargetLanguage = translationRequest.TargetLanguage,
+                        SourceSegments = sourceSegments,
+                        TranslatedUnit = translatedUnit
+                    },
+                    cancellationToken);
+                targetSegments = resegmentation.Segments;
+
+                _logger.LogDebug(
+                    "Resegmented translation unit {StartPosition}-{EndPosition} using {Method} ({Mode}).",
+                    unit[0].Representative.Position,
+                    unit[^1].Representative.Position,
+                    resegmentation.SelectedMethod,
+                    resegmentation.Mode);
+            }
 
             for (var unitIndex = 0; unitIndex < unit.Count; unitIndex++)
             {
@@ -155,9 +187,9 @@ public sealed class SentenceAwareTranslationUnitService
     }
 
     /// <summary>
-    /// Splits a translated unit into exactly the same number of subtitle segments as the source
-    /// unit. Boundaries are selected near source-length-proportional positions, preferring target
-    /// punctuation compatible with the corresponding source boundary and otherwise whitespace.
+    /// Deterministic baseline/fallback that splits a translated unit into exactly the same number
+    /// of subtitle segments as the source unit. Boundaries are selected near source-length-
+    /// proportional positions, preferring compatible target punctuation and otherwise whitespace.
     /// </summary>
     public static IReadOnlyList<string> ResegmentTranslation(
         string translatedUnit,

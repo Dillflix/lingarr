@@ -27,6 +27,7 @@ public class TranslationJob
     private readonly IScheduleService _scheduleService;
     private readonly IStatisticsService _statisticsService;
     private readonly ITranslationServiceFactory _translationServiceFactory;
+    private readonly ITranslationUnitResegmentationService _resegmentationService;
     private readonly ITranslationRequestService _translationRequestService;
     private readonly ITranslationRequestEventService _eventService;
 
@@ -39,6 +40,7 @@ public class TranslationJob
         IScheduleService scheduleService,
         IStatisticsService statisticsService,
         ITranslationServiceFactory translationServiceFactory,
+        ITranslationUnitResegmentationService resegmentationService,
         ITranslationRequestService translationRequestService,
         ITranslationRequestEventService eventService)
     {
@@ -50,6 +52,7 @@ public class TranslationJob
         _scheduleService = scheduleService;
         _statisticsService = statisticsService;
         _translationServiceFactory = translationServiceFactory;
+        _resegmentationService = resegmentationService;
         _translationRequestService = translationRequestService;
         _eventService = eventService;
     }
@@ -228,7 +231,8 @@ public class TranslationJob
                 var sentenceAwareTranslator = new SentenceAwareTranslationUnitService(
                     translator,
                     _progressService,
-                    _logger);
+                    _logger,
+                    _resegmentationService);
 
                 translatedSubtitles = await sentenceAwareTranslator.TranslateSubtitles(
                     subtitles,

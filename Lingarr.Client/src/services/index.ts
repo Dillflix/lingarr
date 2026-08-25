@@ -16,6 +16,7 @@ import { telemetryService } from '@/services/telemetryService'
 import { logsService } from '@/services/logsService'
 import { requestTemplateService } from '@/services/requestTemplateService'
 import { pluginService } from '@/services/pluginService'
+import { resegmentationService } from '@/services/resegmentationService'
 
 axios.defaults.baseURL = baseUrl()
 
@@ -55,7 +56,8 @@ const services = (axios: AxiosStatic): Services => ({
     logs: logsService(),
     telemetry: telemetryService(axios),
     requestTemplate: requestTemplateService(axios),
-    plugin: pluginService(axios)
+    plugin: pluginService(axios),
+    resegmentation: resegmentationService(axios)
 })
 
 export default services(axios)

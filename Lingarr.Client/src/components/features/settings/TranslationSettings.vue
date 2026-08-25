@@ -1,94 +1,98 @@
 ﻿<template>
-    <CardComponent title="Translation Request">
-        <template #description>
-            Modify translation request settings by changing retry options or batch size if available in the service.
-        </template>
-        <template #content>
-            <SaveNotification ref="saveNotification" />
-
-            <template
-                v-if="
-                [
-                    SERVICE_TYPE.ANTHROPIC,
-                    SERVICE_TYPE.DEEPSEEK,
-                    SERVICE_TYPE.GEMINI,
-                    SERVICE_TYPE.LOCALAI,
-                    SERVICE_TYPE.MISTRAL,
-                    SERVICE_TYPE.OPENAI,
-                    SERVICE_TYPE.XAI
-                ].includes(
-                    serviceType as
-                        | 'openai'
-                        | 'anthropic'
-                        | 'localai'
-                        | 'gemini'
-                        | 'deepseek'
-                        | 'mistral'
-                        | 'xai'
-                )
-            ">
-                <div class="flex flex-col space-x-2">
-                    <span class="font-semibold">Use batch translation</span>
-                    Process multiple subtitle lines together in batches to improve translation
-                    efficiency and context awareness. Note that single-line translations with context
-                    are still more reliable and of higher quality.
-                </div>
-                <ToggleButton v-model="useBatchTranslation">
-                    <span class="text-sm font-medium text-primary-content">
-                        {{ useBatchTranslation == 'true' ? 'Enabled' : 'Disabled' }}
-                    </span>
-                </ToggleButton>
+    <div class="flex flex-col space-y-4">
+        <CardComponent title="Translation Request">
+            <template #description>
+                Modify translation request settings by changing retry options or batch size if available in the service.
             </template>
+            <template #content>
+                <SaveNotification ref="saveNotification" />
 
-            <template v-if="useBatchTranslation == 'true'">
+                <template
+                    v-if="
+                    [
+                        SERVICE_TYPE.ANTHROPIC,
+                        SERVICE_TYPE.DEEPSEEK,
+                        SERVICE_TYPE.GEMINI,
+                        SERVICE_TYPE.LOCALAI,
+                        SERVICE_TYPE.MISTRAL,
+                        SERVICE_TYPE.OPENAI,
+                        SERVICE_TYPE.XAI
+                    ].includes(
+                        serviceType as
+                            | 'openai'
+                            | 'anthropic'
+                            | 'localai'
+                            | 'gemini'
+                            | 'deepseek'
+                            | 'mistral'
+                            | 'xai'
+                    )
+                ">
+                    <div class="flex flex-col space-x-2">
+                        <span class="font-semibold">Use batch translation</span>
+                        Process multiple subtitle lines together in batches to improve translation
+                        efficiency and context awareness. Sentence-aware translation units and dedicated
+                        resegmentation are used by the non-batch path.
+                    </div>
+                    <ToggleButton v-model="useBatchTranslation">
+                        <span class="text-sm font-medium text-primary-content">
+                            {{ useBatchTranslation == 'true' ? 'Enabled' : 'Disabled' }}
+                        </span>
+                    </ToggleButton>
+                </template>
+
+                <template v-if="useBatchTranslation == 'true'">
+                    <div class="flex flex-col space-x-2">
+                        <span class="font-semibold">Batch size:</span>
+                        Amount of subtitle lines in a single batch.
+                    </div>
+                    <InputComponent
+                        v-model="maxBatchSize"
+                        :validation-type="INPUT_VALIDATION_TYPE.NUMBER"
+                        @update:validation="(val) => (isValid.maxBatchSize = val)" />
+                </template>
+
                 <div class="flex flex-col space-x-2">
-                    <span class="font-semibold">Batch size:</span>
-                    Amount of subtitle lines in a single batch.
+                    <span class="font-semibold">Request timeout:</span>
+                    Maximum time in minutes to wait for a translation response before the request is
+                    cancelled. Increase this if you run a slow local AI on minimal hardware for example.
                 </div>
                 <InputComponent
-                    v-model="maxBatchSize"
+                    v-model="requestTimeout"
                     :validation-type="INPUT_VALIDATION_TYPE.NUMBER"
-                    @update:validation="(val) => (isValid.maxBatchSize = val)" />
+                    @update:validation="(val) => (isValid.requestTimeout = val)" />
+
+                <div class="flex flex-col space-x-2">
+                    <span class="font-semibold">Max translation retries:</span>
+                    Maximum number of retries per line or batch.
+                </div>
+                <InputComponent
+                    v-model="maxRetries"
+                    :validation-type="INPUT_VALIDATION_TYPE.NUMBER"
+                    @update:validation="(val) => (isValid.maxRetries = val)" />
+
+                <div class="flex flex-col space-x-2">
+                    <span class="font-semibold">Delay between retries:</span>
+                    Initial delay before retrying, in seconds.
+                </div>
+                <InputComponent
+                    v-model="retryDelay"
+                    :validation-type="INPUT_VALIDATION_TYPE.NUMBER"
+                    @update:validation="(val) => (isValid.retryDelay = val)" />
+
+                <div class="flex flex-col space-x-2">
+                    <span class="font-semibold">Retry delay multiplier:</span>
+                    Factor by which the delay increases after each retry.
+                </div>
+                <InputComponent
+                    v-model="retryDelayMultiplier"
+                    :validation-type="INPUT_VALIDATION_TYPE.NUMBER"
+                    @update:validation="(val) => (isValid.retryDelayMultiplier = val)" />
             </template>
+        </CardComponent>
 
-            <div class="flex flex-col space-x-2">
-                <span class="font-semibold">Request timeout:</span>
-                Maximum time in minutes to wait for a translation response before the request is
-                cancelled. Increase this if you run a slow local AI on minimal hardware for example.
-            </div>
-            <InputComponent
-                v-model="requestTimeout"
-                :validation-type="INPUT_VALIDATION_TYPE.NUMBER"
-                @update:validation="(val) => (isValid.requestTimeout = val)" />
-
-            <div class="flex flex-col space-x-2">
-                <span class="font-semibold">Max translation retries:</span>
-                Maximum number of retries per line or batch.
-            </div>
-            <InputComponent
-                v-model="maxRetries"
-                :validation-type="INPUT_VALIDATION_TYPE.NUMBER"
-                @update:validation="(val) => (isValid.maxRetries = val)" />
-
-            <div class="flex flex-col space-x-2">
-                <span class="font-semibold">Delay between retries:</span>
-                Initial delay before retrying, in seconds.
-            </div>
-            <InputComponent
-                v-model="retryDelay"
-                :validation-type="INPUT_VALIDATION_TYPE.NUMBER"
-                @update:validation="(val) => (isValid.retryDelay = val)" />
-
-            <div class="flex flex-col space-x-2">
-                <span class="font-semibold">Retry delay multiplier:</span>
-                Factor by which the delay increases after each retry.
-            </div>
-            <InputComponent
-                v-model="retryDelayMultiplier"
-                :validation-type="INPUT_VALIDATION_TYPE.NUMBER"
-                @update:validation="(val) => (isValid.retryDelayMultiplier = val)" />
-        </template>
-    </CardComponent>
+        <ResegmentationSettings v-if="useBatchTranslation !== 'true'" />
+    </div>
 </template>
 
 <script setup lang="ts">
@@ -99,6 +103,7 @@ import CardComponent from '@/components/common/CardComponent.vue'
 import SaveNotification from '@/components/common/SaveNotification.vue'
 import InputComponent from '@/components/common/InputComponent.vue'
 import ToggleButton from '@/components/common/ToggleButton.vue'
+import ResegmentationSettings from '@/components/features/settings/ResegmentationSettings.vue'
 
 const saveNotification = ref<InstanceType<typeof SaveNotification> | null>(null)
 const settingsStore = useSettingStore()

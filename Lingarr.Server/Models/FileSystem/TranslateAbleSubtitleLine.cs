@@ -1,4 +1,6 @@
-﻿namespace Lingarr.Server.Models.FileSystem;
+﻿using Lingarr.Contracts.Models;
+
+namespace Lingarr.Server.Models.FileSystem;
 
 public class TranslateAbleSubtitleLine
 {
@@ -7,4 +9,5 @@ public class TranslateAbleSubtitleLine
     public required string TargetLanguage { get; set; }
     public List<string>? ContextLinesBefore { get; set; }
     public List<string>? ContextLinesAfter { get; set; }
+    public IReadOnlyList<TranslationContextPair>? ContextPairsBefore { get; set; }
 }

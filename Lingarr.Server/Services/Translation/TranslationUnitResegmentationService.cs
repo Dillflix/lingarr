@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -42,7 +43,7 @@ public sealed class TranslationUnitResegmentationService : ITranslationUnitReseg
         """;
 
     public const string DefaultValidatorSystemPrompt = """
-        You are a subtitle segmentation judge. Compare two segmentations of exactly the same target translation against the source timing segments. Judge semantic alignment of each target segment to its source slot, readability, punctuation, and balance. Do not reward changes to the translation wording. Return JSON only.
+        You are a subtitle segmentation judge. Compare Candidate A and Candidate B, which are two segmentations of exactly the same target translation against the same source timing segments. Their origins are intentionally hidden and their A/B order is randomized. Judge semantic alignment of each target segment to its source slot, readability, punctuation, and balance. Do not infer or favor how either candidate was produced. Do not reward changes to the translation wording. Return JSON only.
         """;
 
     public const string DefaultValidatorUserPrompt = """
@@ -55,13 +56,13 @@ public sealed class TranslationUnitResegmentationService : ITranslationUnitReseg
         Complete target translation:
         {translatedUnit}
 
-        Model-assisted segmentation:
-        {modelSegmentsJson}
+        Candidate A segmentation:
+        {candidateASegmentsJson}
 
-        Deterministic segmentation:
-        {deterministicSegmentsJson}
+        Candidate B segmentation:
+        {candidateBSegmentsJson}
 
-        Choose which segmentation better aligns the unchanged target translation to the source timing slots. Return JSON with winner ("model" or "deterministic"), modelScore (0-100), deterministicScore (0-100), and reason.
+        Choose which candidate better aligns the unchanged target translation to the source timing slots. The candidates' origins are deliberately undisclosed. Return JSON with winner ("A" or "B"), candidateAScore (0-100), candidateBScore (0-100), and reason.
         """;
 
     private readonly ISettingService _settings;
@@ -300,9 +301,14 @@ public sealed class TranslationUnitResegmentationService : ITranslationUnitReseg
 
         try
         {
+            var modelIsCandidateA = IsModelCandidateA(request, modelSegments, deterministicSegments);
+            var candidateASegments = modelIsCandidateA ? modelSegments : deterministicSegments;
+            var candidateBSegments = modelIsCandidateA ? deterministicSegments : modelSegments;
             var userPrompt = RenderValidatorPrompt(
                 config.UserPrompt,
                 request,
+                candidateASegments,
+                candidateBSegments,
                 modelSegments,
                 deterministicSegments);
             var (content, latencyMs) = await SendChatCompletionAsync(
@@ -319,11 +325,29 @@ public sealed class TranslationUnitResegmentationService : ITranslationUnitReseg
                 return null;
             }
 
+            string winner;
+            double modelScore;
+            double deterministicScore;
+            if (decision.IsBlind)
+            {
+                var candidateAWon = string.Equals(decision.Winner, "A", StringComparison.OrdinalIgnoreCase);
+                winner = candidateAWon == modelIsCandidateA ? "model" : "deterministic";
+                modelScore = modelIsCandidateA ? decision.FirstScore : decision.SecondScore;
+                deterministicScore = modelIsCandidateA ? decision.SecondScore : decision.FirstScore;
+            }
+            else
+            {
+                // Backward compatibility for explicitly customized legacy validator prompts.
+                winner = decision.Winner;
+                modelScore = decision.FirstScore;
+                deterministicScore = decision.SecondScore;
+            }
+
             return new ResegmentationValidatorDecision
             {
-                Winner = decision.Winner,
-                ModelScore = decision.ModelScore,
-                DeterministicScore = decision.DeterministicScore,
+                Winner = winner,
+                ModelScore = modelScore,
+                DeterministicScore = deterministicScore,
                 Reason = decision.Reason,
                 LatencyMs = latencyMs,
                 Model = config.Model
@@ -565,12 +589,12 @@ public sealed class TranslationUnitResegmentationService : ITranslationUnitReseg
                 type = "object",
                 properties = new
                 {
-                    winner = new { type = "string", @enum = new[] { "model", "deterministic" } },
-                    modelScore = new { type = "number", minimum = 0, maximum = 100 },
-                    deterministicScore = new { type = "number", minimum = 0, maximum = 100 },
+                    winner = new { type = "string", @enum = new[] { "A", "B" } },
+                    candidateAScore = new { type = "number", minimum = 0, maximum = 100 },
+                    candidateBScore = new { type = "number", minimum = 0, maximum = 100 },
                     reason = new { type = "string" }
                 },
-                required = new[] { "winner", "modelScore", "deterministicScore", "reason" },
+                required = new[] { "winner", "candidateAScore", "candidateBScore", "reason" },
                 additionalProperties = false
             }
         }
@@ -591,6 +615,8 @@ public sealed class TranslationUnitResegmentationService : ITranslationUnitReseg
     private static string RenderValidatorPrompt(
         string template,
         ResegmentationEvaluationRequest request,
+        IReadOnlyList<string> candidateASegments,
+        IReadOnlyList<string> candidateBSegments,
         IReadOnlyList<string> modelSegments,
         IReadOnlyList<string> deterministicSegments)
     {
@@ -600,8 +626,30 @@ public sealed class TranslationUnitResegmentationService : ITranslationUnitReseg
             .Replace("{segmentCount}", request.SourceSegments.Count.ToString(), StringComparison.Ordinal)
             .Replace("{sourceSegmentsJson}", JsonSerializer.Serialize(request.SourceSegments), StringComparison.Ordinal)
             .Replace("{translatedUnit}", request.TranslatedUnit, StringComparison.Ordinal)
+            .Replace("{candidateASegmentsJson}", JsonSerializer.Serialize(candidateASegments), StringComparison.Ordinal)
+            .Replace("{candidateBSegmentsJson}", JsonSerializer.Serialize(candidateBSegments), StringComparison.Ordinal)
+            // Keep legacy placeholders usable only for intentionally customized old prompts.
             .Replace("{modelSegmentsJson}", JsonSerializer.Serialize(modelSegments), StringComparison.Ordinal)
             .Replace("{deterministicSegmentsJson}", JsonSerializer.Serialize(deterministicSegments), StringComparison.Ordinal);
+    }
+
+    private static bool IsModelCandidateA(
+        ResegmentationEvaluationRequest request,
+        IReadOnlyList<string> modelSegments,
+        IReadOnlyList<string> deterministicSegments)
+    {
+        var left = JsonSerializer.Serialize(modelSegments);
+        var right = JsonSerializer.Serialize(deterministicSegments);
+        var ordered = new[] { left, right };
+        Array.Sort(ordered, StringComparer.Ordinal);
+        var material = string.Join("\n",
+            request.SourceLanguage,
+            request.TargetLanguage,
+            JsonSerializer.Serialize(request.SourceSegments),
+            request.TranslatedUnit,
+            ordered[0],
+            ordered[1]);
+        return (SHA256.HashData(Encoding.UTF8.GetBytes(material))[0] & 1) == 0;
     }
 
     private static string ExtractAssistantContent(string body)
@@ -673,16 +721,30 @@ public sealed class TranslationUnitResegmentationService : ITranslationUnitReseg
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
             var winner = root.GetProperty("winner").GetString();
-            if (winner is not ("model" or "deterministic"))
+            var reason = root.TryGetProperty("reason", out var reasonElement) ? reasonElement.GetString() : null;
+
+            if (winner is "A" or "B")
             {
-                return null;
+                return new ValidatorPayload(
+                    winner,
+                    root.GetProperty("candidateAScore").GetDouble(),
+                    root.GetProperty("candidateBScore").GetDouble(),
+                    true,
+                    reason);
             }
 
-            return new ValidatorPayload(
-                winner,
-                root.GetProperty("modelScore").GetDouble(),
-                root.GetProperty("deterministicScore").GetDouble(),
-                root.TryGetProperty("reason", out var reason) ? reason.GetString() : null);
+            // Backward compatibility for user-authored prompts created before blind A/B validation.
+            if (winner is "model" or "deterministic")
+            {
+                return new ValidatorPayload(
+                    winner,
+                    root.GetProperty("modelScore").GetDouble(),
+                    root.GetProperty("deterministicScore").GetDouble(),
+                    false,
+                    reason);
+            }
+
+            return null;
         }
         catch (Exception)
         {
@@ -847,7 +909,8 @@ public sealed class TranslationUnitResegmentationService : ITranslationUnitReseg
 
     private sealed record ValidatorPayload(
         string Winner,
-        double ModelScore,
-        double DeterministicScore,
+        double FirstScore,
+        double SecondScore,
+        bool IsBlind,
         string? Reason);
 }

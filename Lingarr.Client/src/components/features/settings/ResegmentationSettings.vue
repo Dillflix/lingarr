@@ -88,8 +88,8 @@
                     <div class="mb-3">
                         <div class="font-semibold">Independent validator / judge</div>
                         <p class="text-secondary-content/60 text-xs">
-                            Configure a separate model to compare the semantic alignment from the dedicated
-                            model against the deterministic baseline. It can be a different endpoint and model.
+                            Configure a separate model to compare the two segmentations. Candidate origins are
+                            hidden and A/B order is randomized before the judge sees them to reduce evaluator bias.
                         </p>
                     </div>
 
@@ -122,13 +122,13 @@
                             :required-placeholders="[
                                 '{sourceSegmentsJson}',
                                 '{translatedUnit}',
-                                '{modelSegmentsJson}',
-                                '{deterministicSegmentsJson}'
+                                '{candidateASegmentsJson}',
+                                '{candidateBSegmentsJson}'
                             ]"
                             @update:validation="(value) => (validatorUserPromptValid = value)" />
                         <p class="text-secondary-content/60 text-xs">
-                            Validator placeholders additionally include <code>{modelSegmentsJson}</code> and
-                            <code>{deterministicSegmentsJson}</code>.
+                            Validator placeholders additionally include <code>{candidateASegmentsJson}</code> and
+                            <code>{candidateBSegmentsJson}</code>. Candidate identity is mapped back only after judging.
                         </p>
                     </div>
                 </div>

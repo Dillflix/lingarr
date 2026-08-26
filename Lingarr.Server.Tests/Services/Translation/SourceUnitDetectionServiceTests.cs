@@ -128,6 +128,46 @@ public class SourceUnitDetectionServiceTests
     }
 
     [Fact]
+    public async Task DefaultValidatorPrompt_BlindsCandidateOrigins()
+    {
+        var handler = new QueueHttpMessageHandler([
+            JsonResponse("{\"unitLength\":3}"),
+            JsonResponse("{\"winner\":\"A\",\"candidateAScore\":90,\"candidateBScore\":70,\"reason\":\"Better boundary\"}")
+        ]);
+        var service = CreateService(handler);
+
+        var result = await service.DetectAsync(new SourceUnitDetectionRequest
+        {
+            SourceLanguage = "English",
+            Cues =
+            [
+                Cue(1, 1000, 1800, "Complete sentence."),
+                Cue(2, 1850, 2500, "Another"),
+                Cue(3, 2550, 3300, "sentence."),
+                Cue(4, 3400, 4100, "Next.")
+            ],
+            Mode = "validated",
+            ModelOverride = ModelOverride("boundary-model"),
+            ValidatorOverride = new SourceUnitDetectionModelOverride
+            {
+                Endpoint = "http://localhost:9999/v1",
+                Model = "judge-model",
+                ApiKey = string.Empty,
+                SystemPrompt = SourceUnitDetectionService.DefaultValidatorSystemPrompt,
+                UserPrompt = SourceUnitDetectionService.DefaultValidatorUserPrompt,
+                TimeoutSeconds = 30
+            }
+        }, CancellationToken.None);
+
+        Assert.NotNull(result.Validator);
+        var judgeRequest = handler.RequestBodies[1];
+        Assert.Contains("Candidate A unitLength", judgeRequest, StringComparison.Ordinal);
+        Assert.Contains("Candidate B unitLength", judgeRequest, StringComparison.Ordinal);
+        Assert.DoesNotContain("Model proposal", judgeRequest, StringComparison.Ordinal);
+        Assert.DoesNotContain("Heuristic proposal", judgeRequest, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task UnsupportedJsonSchema_RetriesWithoutResponseFormat()
     {
         var handler = new QueueHttpMessageHandler([

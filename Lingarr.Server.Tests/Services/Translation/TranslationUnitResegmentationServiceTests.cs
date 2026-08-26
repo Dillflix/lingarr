@@ -106,6 +106,42 @@ public class TranslationUnitResegmentationServiceTests
     }
 
     [Fact]
+    public async Task DefaultValidatorPrompt_BlindsCandidateOrigins()
+    {
+        var handler = new QueueHttpMessageHandler([
+            JsonResponse("{\"segments\":[\"Jeg elsker\",\"dig.\"]}"),
+            JsonResponse("{\"winner\":\"A\",\"candidateAScore\":90,\"candidateBScore\":70,\"reason\":\"Better alignment\"}")
+        ]);
+        var service = CreateService(handler);
+
+        var result = await service.EvaluateAsync(new ResegmentationEvaluationRequest
+        {
+            SourceLanguage = "English",
+            TargetLanguage = "Danish",
+            SourceSegments = ["I love", "you."],
+            TranslatedUnit = "Jeg elsker dig.",
+            Mode = ResegmentationModes.Validated,
+            ModelOverride = ModelOverride("alignment-model"),
+            ValidatorOverride = new ResegmentationModelOverride
+            {
+                Endpoint = "http://localhost:9999/v1",
+                Model = "judge-model",
+                ApiKey = string.Empty,
+                SystemPrompt = TranslationUnitResegmentationService.DefaultValidatorSystemPrompt,
+                UserPrompt = TranslationUnitResegmentationService.DefaultValidatorUserPrompt,
+                TimeoutSeconds = 30
+            }
+        }, CancellationToken.None);
+
+        Assert.NotNull(result.Validator);
+        var judgeRequest = handler.RequestBodies[1];
+        Assert.Contains("Candidate A segmentation", judgeRequest, StringComparison.Ordinal);
+        Assert.Contains("Candidate B segmentation", judgeRequest, StringComparison.Ordinal);
+        Assert.DoesNotContain("Model-assisted segmentation", judgeRequest, StringComparison.Ordinal);
+        Assert.DoesNotContain("Deterministic segmentation", judgeRequest, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task JsonSchemaUnsupported_RetriesWithoutResponseFormat()
     {
         var handler = new QueueHttpMessageHandler([

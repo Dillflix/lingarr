@@ -43,6 +43,22 @@ public static class SettingKeys
             public const string GenerateRequestTemplate = "local_ai_generate_request_template";
         }
 
+        public static class SourceUnitDetection
+        {
+            public const string Mode = "source_unit_detection_mode";
+            public const string Endpoint = "source_unit_detection_endpoint";
+            public const string Model = "source_unit_detection_model";
+            public const string ApiKey = "source_unit_detection_api_key";
+            public const string SystemPrompt = "source_unit_detection_system_prompt";
+            public const string UserPrompt = "source_unit_detection_user_prompt";
+            public const string TimeoutSeconds = "source_unit_detection_timeout_seconds";
+            public const string ValidatorEndpoint = "source_unit_detection_validator_endpoint";
+            public const string ValidatorModel = "source_unit_detection_validator_model";
+            public const string ValidatorApiKey = "source_unit_detection_validator_api_key";
+            public const string ValidatorSystemPrompt = "source_unit_detection_validator_system_prompt";
+            public const string ValidatorUserPrompt = "source_unit_detection_validator_user_prompt";
+        }
+
         public static class Resegmentation
         {
             public const string Mode = "resegmentation_mode";

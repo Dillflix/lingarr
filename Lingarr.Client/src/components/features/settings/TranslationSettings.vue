@@ -31,8 +31,8 @@
                     <div class="flex flex-col space-x-2">
                         <span class="font-semibold">Use batch translation</span>
                         Process multiple subtitle lines together in batches to improve translation
-                        efficiency and context awareness. Sentence-aware translation units and dedicated
-                        resegmentation are used by the non-batch path.
+                        efficiency and context awareness. Source-unit detection and target resegmentation
+                        are used by the non-batch path.
                     </div>
                     <ToggleButton v-model="useBatchTranslation">
                         <span class="text-sm font-medium text-primary-content">
@@ -92,6 +92,7 @@
         </CardComponent>
 
         <template v-if="useBatchTranslation !== 'true'">
+            <SourceUnitDetectionSettings />
             <ResegmentationSettings />
             <ReferenceFreeBenchmarkSettings />
         </template>
@@ -106,6 +107,7 @@ import CardComponent from '@/components/common/CardComponent.vue'
 import SaveNotification from '@/components/common/SaveNotification.vue'
 import InputComponent from '@/components/common/InputComponent.vue'
 import ToggleButton from '@/components/common/ToggleButton.vue'
+import SourceUnitDetectionSettings from '@/components/features/settings/SourceUnitDetectionSettings.vue'
 import ResegmentationSettings from '@/components/features/settings/ResegmentationSettings.vue'
 import ReferenceFreeBenchmarkSettings from '@/components/features/settings/ReferenceFreeBenchmarkSettings.vue'
 

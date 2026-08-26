@@ -28,6 +28,16 @@ export const SETTINGS = {
     AI_USER_PROMPT: 'ai_user_prompt',
     PROOFREAD_PROMPT: 'proofread_prompt',
     PROOFREAD_USER_PROMPT: 'proofread_user_prompt',
+    SOURCE_UNIT_DETECTION_MODE: 'source_unit_detection_mode',
+    SOURCE_UNIT_DETECTION_ENDPOINT: 'source_unit_detection_endpoint',
+    SOURCE_UNIT_DETECTION_MODEL: 'source_unit_detection_model',
+    SOURCE_UNIT_DETECTION_SYSTEM_PROMPT: 'source_unit_detection_system_prompt',
+    SOURCE_UNIT_DETECTION_USER_PROMPT: 'source_unit_detection_user_prompt',
+    SOURCE_UNIT_DETECTION_TIMEOUT_SECONDS: 'source_unit_detection_timeout_seconds',
+    SOURCE_UNIT_DETECTION_VALIDATOR_ENDPOINT: 'source_unit_detection_validator_endpoint',
+    SOURCE_UNIT_DETECTION_VALIDATOR_MODEL: 'source_unit_detection_validator_model',
+    SOURCE_UNIT_DETECTION_VALIDATOR_SYSTEM_PROMPT: 'source_unit_detection_validator_system_prompt',
+    SOURCE_UNIT_DETECTION_VALIDATOR_USER_PROMPT: 'source_unit_detection_validator_user_prompt',
     RESEGMENTATION_MODE: 'resegmentation_mode',
     RESEGMENTATION_ENDPOINT: 'resegmentation_endpoint',
     RESEGMENTATION_MODEL: 'resegmentation_model',
@@ -108,6 +118,16 @@ export interface ISettings {
     ai_user_prompt: string
     proofread_prompt: string
     proofread_user_prompt: string
+    source_unit_detection_mode: string
+    source_unit_detection_endpoint: string
+    source_unit_detection_model: string
+    source_unit_detection_system_prompt: string
+    source_unit_detection_user_prompt: string
+    source_unit_detection_timeout_seconds: string
+    source_unit_detection_validator_endpoint: string
+    source_unit_detection_validator_model: string
+    source_unit_detection_validator_system_prompt: string
+    source_unit_detection_validator_user_prompt: string
     resegmentation_mode: string
     resegmentation_endpoint: string
     resegmentation_model: string
@@ -161,7 +181,6 @@ export interface ISettings {
     sonarr_default_include: string
 }
 
-
 export const ENCRYPTED_SETTINGS = {
     API_KEY: 'api_key',
     RADARR_API_KEY: 'radarr_api_key',
@@ -175,6 +194,8 @@ export const ENCRYPTED_SETTINGS = {
     DEEPL_API_KEY: 'deepl_api_key',
     LIBRETRANSLATE_API_KEY: 'libretranslate_api_key',
     LOCAL_AI_API_KEY: 'local_ai_api_key',
+    SOURCE_UNIT_DETECTION_API_KEY: 'source_unit_detection_api_key',
+    SOURCE_UNIT_DETECTION_VALIDATOR_API_KEY: 'source_unit_detection_validator_api_key',
     RESEGMENTATION_API_KEY: 'resegmentation_api_key',
     RESEGMENTATION_VALIDATOR_API_KEY: 'resegmentation_validator_api_key'
 } as const
@@ -192,6 +213,8 @@ export interface IEncryptedSettings {
     deepl_api_key: string
     libretranslate_api_key: string
     local_ai_api_key: string
+    source_unit_detection_api_key: string
+    source_unit_detection_validator_api_key: string
     resegmentation_api_key: string
     resegmentation_validator_api_key: string
 }

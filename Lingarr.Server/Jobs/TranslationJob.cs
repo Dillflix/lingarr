@@ -21,6 +21,7 @@ public class TranslationJob
 {
     private readonly ILogger<TranslationJob> _logger;
     private readonly ILogger<ResegmentationBenchmarkService> _benchmarkLogger;
+    private readonly ILogger<SourceUnitDetectionService> _sourceUnitDetectionLogger;
     private readonly ISettingService _settings;
     private readonly LingarrDbContext _dbContext;
     private readonly IProgressService _progressService;
@@ -36,6 +37,7 @@ public class TranslationJob
     public TranslationJob(
         ILogger<TranslationJob> logger,
         ILogger<ResegmentationBenchmarkService> benchmarkLogger,
+        ILogger<SourceUnitDetectionService> sourceUnitDetectionLogger,
         ISettingService settings,
         LingarrDbContext dbContext,
         IProgressService progressService,
@@ -50,6 +52,7 @@ public class TranslationJob
     {
         _logger = logger;
         _benchmarkLogger = benchmarkLogger;
+        _sourceUnitDetectionLogger = sourceUnitDetectionLogger;
         _settings = settings;
         _dbContext = dbContext;
         _progressService = progressService;
@@ -124,42 +127,30 @@ public class TranslationJob
                 ? linesAfter
                 : 0;
 
-            // validate subtitles
             if (validateSubtitles)
             {
                 var validationOptions = new SubtitleValidationOptions
                 {
-                    // File size setting - default to 2MB if parsing fails
                     MaxFileSizeBytes = long.TryParse(settings[SettingKeys.SubtitleValidation.MaxFileSizeBytes],
                         out var maxFileSizeBytes)
                         ? maxFileSizeBytes
                         : 2 * 1024 * 1024,
-
-                    // Maximum characters per subtitle - default to 500 if parsing fails
                     MaxSubtitleLength = int.TryParse(settings[SettingKeys.SubtitleValidation.MaxSubtitleLength],
                         out var maxSubtitleLength)
                         ? maxSubtitleLength
                         : 500,
-
-                    // Minimum characters per subtitle - default to 1 if parsing fails
                     MinSubtitleLength = int.TryParse(settings[SettingKeys.SubtitleValidation.MinSubtitleLength],
                         out var minSubtitleLength)
                         ? minSubtitleLength
                         : 2,
-
-                    // Minimum duration in milliseconds - default to 500ms if parsing fails
                     MinDurationMs = double.TryParse(settings[SettingKeys.SubtitleValidation.MinDurationMs],
                         out var minDurationMs)
                         ? minDurationMs
                         : 500,
-
-                    // Maximum duration in seconds - default to 10s if parsing fails
                     MaxDurationSecs = double.TryParse(settings[SettingKeys.SubtitleValidation.MaxDurationSecs],
                         out var maxDurationSecs)
                         ? maxDurationSecs
                         : 10,
-
-                    // Used to determine content length when
                     StripSubtitleFormatting = stripSubtitleFormatting
                 };
 
@@ -170,7 +161,6 @@ public class TranslationJob
                 }
             }
 
-            // translate subtitles
             var services = _translationServiceFactory.CreateTranslationServices(serviceNames);
             if (services.Count == 0)
             {
@@ -180,8 +170,6 @@ public class TranslationJob
             var translator = new SubtitleTranslationService(services, _logger, _progressService);
             var subtitles = await _subtitleService.ReadSubtitles(request.SubtitleToTranslate);
 
-            // subtitle already carries a translation from an earlier prior run.
-            // Group by Position and keep the most recent row in case the same position was used more than once.
             var persistedLines = (await _dbContext.TranslationRequestLines
                     .Where(line => line.TranslationRequestId == request.Id)
                     .Select(line => new { line.Id, line.Position, line.Target })
@@ -234,22 +222,24 @@ public class TranslationJob
                         contextBefore, contextAfter);
                 }
 
-                // Capture the exact source-segment list and complete translation before any target
-                // resegmentation. The benchmark service is observational; its capture failures are
-                // isolated inside SentenceAwareTranslationUnitService and cannot fail translation.
                 var benchmarkService = new ResegmentationBenchmarkService(
                     _dbContext,
                     _settings,
                     _resegmentationService,
                     _httpClientFactory,
                     _benchmarkLogger);
+                var sourceUnitDetectionService = new SourceUnitDetectionService(
+                    _settings,
+                    _httpClientFactory,
+                    _sourceUnitDetectionLogger);
 
                 var sentenceAwareTranslator = new SentenceAwareTranslationUnitService(
                     translator,
                     _progressService,
                     _logger,
                     _resegmentationService,
-                    benchmarkService);
+                    benchmarkService,
+                    sourceUnitDetectionService);
 
                 translatedSubtitles = await sentenceAwareTranslator.TranslateSubtitles(
                     subtitles,
@@ -278,7 +268,6 @@ public class TranslationJob
                 }
             }
 
-            // statistics tracking, only count subtitles translated by this run
             var newlyTranslatedSubtitles = persistedLines.Count == 0
                 ? translatedSubtitles
                 : translatedSubtitles.Where(s => !persistedLines.ContainsKey(s.Position)).ToList();

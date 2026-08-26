@@ -11,11 +11,9 @@ namespace Lingarr.Server.Services.Translation;
 
 /// <summary>
 /// Groups subtitle cues into complete linguistic translation units, translates each unit once,
-/// and resegments the translated text back onto the original cue timings. Resegmentation can use
-/// a dedicated model and independent validator, while retaining deterministic splitting as a
-/// baseline and fail-safe.
-/// A one-cue unit is the normal trivial case; multi-cue units are formed only when adjacent
-/// subtitle text strongly indicates that a sentence or utterance continues across cue boundaries.
+/// and resegments the translated text back onto the original cue timings. Source-unit detection
+/// and target resegmentation are distinct stages, each of which may use deterministic/model/
+/// validated modes while retaining deterministic fallbacks.
 /// </summary>
 public sealed class SentenceAwareTranslationUnitService
 {
@@ -24,25 +22,12 @@ public sealed class SentenceAwareTranslationUnitService
     private const int MaxTranslationUnitChars = 500;
     private const int MaxTranslationUnitGapMs = 2000;
 
-    private static readonly HashSet<string> ContinuationWords = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "and", "but", "or", "so", "because", "who", "whom", "whose", "which", "that",
-        "when", "where", "while", "after", "before", "if", "as", "than", "then", "to",
-        "of", "for", "with", "from", "in", "on", "at", "by", "into", "about", "over", "under"
-    };
-
-    private static readonly HashSet<string> DanglingWords = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "a", "an", "the", "and", "but", "or", "because", "that", "who", "whom", "whose",
-        "which", "if", "when", "while", "as", "than", "to", "of", "for", "with", "from",
-        "in", "on", "at", "by", "into", "about", "over", "under"
-    };
-
     private readonly SubtitleTranslationService _translator;
     private readonly IProgressService _progressService;
     private readonly ILogger _logger;
     private readonly ITranslationUnitResegmentationService? _resegmentationService;
     private readonly IResegmentationBenchmarkService? _benchmarkService;
+    private readonly ISourceUnitDetectionService? _sourceUnitDetectionService;
     private int _lastProgression = -1;
 
     public SentenceAwareTranslationUnitService(
@@ -50,13 +35,15 @@ public sealed class SentenceAwareTranslationUnitService
         IProgressService progressService,
         ILogger logger,
         ITranslationUnitResegmentationService? resegmentationService = null,
-        IResegmentationBenchmarkService? benchmarkService = null)
+        IResegmentationBenchmarkService? benchmarkService = null,
+        ISourceUnitDetectionService? sourceUnitDetectionService = null)
     {
         _translator = translator;
         _progressService = progressService;
         _logger = logger;
         _resegmentationService = resegmentationService;
         _benchmarkService = benchmarkService;
+        _sourceUnitDetectionService = sourceUnitDetectionService;
     }
 
     /// <summary>
@@ -89,7 +76,11 @@ public sealed class SentenceAwareTranslationUnitService
                 continue;
             }
 
-            var unit = BuildTranslationUnit(logicalCues, cueIndex);
+            var unit = await BuildTranslationUnitAsync(
+                logicalCues,
+                cueIndex,
+                translationRequest.SourceLanguage,
+                cancellationToken);
             var sourceSegments = unit.Select(item => item.SourceText).ToList();
             var unitSource = string.Join(" ", sourceSegments.Where(text => !string.IsNullOrWhiteSpace(text))).Trim();
 
@@ -130,10 +121,7 @@ public sealed class SentenceAwareTranslationUnitService
                 ? SubtitleFormatterService.RemoveMarkup(result.Translation)
                 : result.Translation;
 
-            // Capture the exact translation-unit input/output before any segmentation algorithm is
-            // applied. This is the highest-fidelity reference-free benchmark sample: unlike history
-            // reconstruction, it cannot accidentally include legacy per-cue translations or already
-            // resegmented output. Benchmark capture is observational and must never break translation.
+            // Capture the exact translation-unit input/output before any target segmentation is applied.
             if (_benchmarkService is not null && sourceSegments.Count > 1)
             {
                 try
@@ -306,8 +294,6 @@ public sealed class SentenceAwareTranslationUnitService
                 analysisText = sourceText;
             }
 
-            // Plain text is deliberately used for duplicate-layer identity. ASS/SSA shadow/glow/main
-            // rendering layers can differ in markup while representing the same timed spoken text.
             var identity = $"{subtitle.StartTime}|{subtitle.EndTime}|{analysisText}";
             if (byIdentity.TryGetValue(identity, out var existing))
             {
@@ -323,17 +309,64 @@ public sealed class SentenceAwareTranslationUnitService
         return cues;
     }
 
-    private static List<LogicalSubtitleCue> BuildTranslationUnit(
+    private async Task<List<LogicalSubtitleCue>> BuildTranslationUnitAsync(
+        IReadOnlyList<LogicalSubtitleCue> cues,
+        int startIndex,
+        string sourceLanguage,
+        CancellationToken cancellationToken)
+    {
+        var candidates = BuildCandidateWindow(cues, startIndex);
+        if (candidates.Count <= 1)
+        {
+            return candidates;
+        }
+
+        var detectorCues = candidates.Select(ToDetectionCue).ToList();
+        int unitLength;
+
+        if (_sourceUnitDetectionService is null)
+        {
+            unitLength = SourceUnitDetectionService.DetermineHeuristicUnitLength(detectorCues);
+        }
+        else
+        {
+            var detection = await _sourceUnitDetectionService.DetectAsync(
+                new SourceUnitDetectionRequest
+                {
+                    SourceLanguage = sourceLanguage,
+                    Cues = detectorCues
+                },
+                cancellationToken);
+
+            unitLength = Math.Clamp(detection.UnitLength, 1, candidates.Count);
+            _logger.LogDebug(
+                "Source-unit detection at cue {Position} selected {UnitLength} of {CandidateCount} cue(s) using {Method} ({Mode}).",
+                candidates[0].Representative.Position,
+                unitLength,
+                candidates.Count,
+                detection.SelectedMethod,
+                detection.Mode);
+        }
+
+        return candidates.Take(Math.Clamp(unitLength, 1, candidates.Count)).ToList();
+    }
+
+    /// <summary>
+    /// Builds the maximum safe candidate prefix the source detector is allowed to choose from.
+    /// The model may decide semantic boundaries inside this window, but cannot cross resumed cues,
+    /// the configured hard size cap, or a >2 second timing gap.
+    /// </summary>
+    private static List<LogicalSubtitleCue> BuildCandidateWindow(
         IReadOnlyList<LogicalSubtitleCue> cues,
         int startIndex)
     {
-        var unit = new List<LogicalSubtitleCue> { cues[startIndex] };
+        var candidates = new List<LogicalSubtitleCue> { cues[startIndex] };
         var sourceChars = cues[startIndex].SourceText.Length;
 
-        while (unit.Count < MaxTranslationUnitCues && startIndex + unit.Count < cues.Count)
+        while (candidates.Count < MaxTranslationUnitCues && startIndex + candidates.Count < cues.Count)
         {
-            var current = unit[^1];
-            var next = cues[startIndex + unit.Count];
+            var current = candidates[^1];
+            var next = cues[startIndex + candidates.Count];
 
             if (TryGetExistingTranslation(next, out _))
             {
@@ -345,60 +378,30 @@ public sealed class SentenceAwareTranslationUnitService
                 break;
             }
 
-            if (!ShouldJoin(current, next))
+            if (next.Representative.StartTime - current.Representative.EndTime > MaxTranslationUnitGapMs)
             {
                 break;
             }
 
-            unit.Add(next);
+            if (string.IsNullOrWhiteSpace(next.AnalysisText))
+            {
+                break;
+            }
+
+            candidates.Add(next);
             sourceChars += 1 + next.SourceText.Length;
         }
 
-        return unit;
+        return candidates;
     }
 
-    private static bool ShouldJoin(LogicalSubtitleCue current, LogicalSubtitleCue next)
+    private static SourceUnitDetectionCue ToDetectionCue(LogicalSubtitleCue cue) => new()
     {
-        var gap = next.Representative.StartTime - current.Representative.EndTime;
-        if (gap > MaxTranslationUnitGapMs)
-        {
-            return false;
-        }
-
-        var currentText = current.AnalysisText.Trim();
-        var nextText = next.AnalysisText.Trim();
-        if (currentText.Length == 0 || nextText.Length == 0)
-        {
-            return false;
-        }
-
-        if (StartsDialogueTurn(nextText) && !EndsWithContinuationPunctuation(currentText))
-        {
-            return false;
-        }
-
-        if (HasHardTerminalPunctuation(currentText))
-        {
-            return false;
-        }
-
-        if (EndsWithContinuationPunctuation(currentText))
-        {
-            return true;
-        }
-
-        if (EndsWithEllipsis(currentText))
-        {
-            return StartsWithLowercase(nextText) || StartsWithContinuationWord(nextText);
-        }
-
-        if (StartsWithLowercase(nextText) || StartsWithContinuationWord(nextText))
-        {
-            return true;
-        }
-
-        return EndsWithDanglingWord(currentText);
-    }
+        Position = cue.Representative.Position,
+        StartTime = cue.Representative.StartTime,
+        EndTime = cue.Representative.EndTime,
+        Text = cue.AnalysisText
+    };
 
     private static bool TryGetExistingTranslation(LogicalSubtitleCue cue, out string? translation)
     {
@@ -555,83 +558,6 @@ public sealed class SentenceAwareTranslationUnitService
 
         var last = trimmed[^1];
         return IsBoundaryPunctuation(last) ? last : null;
-    }
-
-    private static bool HasHardTerminalPunctuation(string text)
-    {
-        if (EndsWithEllipsis(text))
-        {
-            return false;
-        }
-
-        var trimmed = TrimTrailingClosers(text.TrimEnd());
-        return trimmed.EndsWith('.') || trimmed.EndsWith('?') || trimmed.EndsWith('!');
-    }
-
-    private static bool EndsWithEllipsis(string text)
-    {
-        var trimmed = TrimTrailingClosers(text.TrimEnd());
-        return trimmed.EndsWith("...", StringComparison.Ordinal) || trimmed.EndsWith('…');
-    }
-
-    private static bool EndsWithContinuationPunctuation(string text)
-    {
-        var trimmed = TrimTrailingClosers(text.TrimEnd());
-        return trimmed.EndsWith(',') || trimmed.EndsWith(';') || trimmed.EndsWith(':') ||
-               trimmed.EndsWith('—') || (trimmed.EndsWith('-') && !trimmed.EndsWith("--", StringComparison.Ordinal));
-    }
-
-    private static bool StartsWithLowercase(string text)
-    {
-        var firstLetter = text.FirstOrDefault(char.IsLetter);
-        return firstLetter != default && char.IsLower(firstLetter);
-    }
-
-    private static bool StartsWithContinuationWord(string text)
-    {
-        var word = FirstWord(text);
-        return word is not null && ContinuationWords.Contains(word);
-    }
-
-    private static bool EndsWithDanglingWord(string text)
-    {
-        var word = LastWord(text);
-        return word is not null && DanglingWords.Contains(word);
-    }
-
-    private static bool StartsDialogueTurn(string text)
-    {
-        var trimmed = text.TrimStart();
-        return trimmed.StartsWith("- ", StringComparison.Ordinal) || trimmed.StartsWith("– ", StringComparison.Ordinal) ||
-               trimmed.StartsWith("— ", StringComparison.Ordinal);
-    }
-
-    private static string? FirstWord(string text)
-    {
-        var letters = text.SkipWhile(character => !char.IsLetter(character)).TakeWhile(char.IsLetter).ToArray();
-        return letters.Length == 0 ? null : new string(letters);
-    }
-
-    private static string? LastWord(string text)
-    {
-        var trimmed = TrimTrailingClosers(text.TrimEnd());
-        var end = trimmed.Length - 1;
-        while (end >= 0 && !char.IsLetter(trimmed[end]))
-        {
-            end--;
-        }
-        if (end < 0)
-        {
-            return null;
-        }
-
-        var start = end;
-        while (start >= 0 && char.IsLetter(trimmed[start]))
-        {
-            start--;
-        }
-
-        return trimmed[(start + 1)..(end + 1)];
     }
 
     private static string TrimTrailingClosers(string text)

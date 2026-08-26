@@ -74,7 +74,8 @@
                     <div class="mb-3">
                         <div class="font-semibold">Independent source-boundary validator / judge</div>
                         <p class="text-secondary-content/60 text-xs">
-                            Compares the model boundary with the heuristic boundary only when they disagree.
+                            Compares the two boundaries only when they disagree. Candidate origins are hidden and
+                            A/B order is randomized before the judge sees them to reduce evaluator bias.
                         </p>
                     </div>
 
@@ -106,13 +107,13 @@
                             :rows="9"
                             :required-placeholders="[
                                 '{sourceCuesJson}',
-                                '{modelUnitLength}',
-                                '{heuristicUnitLength}'
+                                '{candidateAUnitLength}',
+                                '{candidateBUnitLength}'
                             ]"
                             @update:validation="(value) => (validatorUserPromptValid = value)" />
                         <p class="text-secondary-content/60 text-xs">
-                            Validator placeholders additionally include <code>{modelUnitLength}</code> and
-                            <code>{heuristicUnitLength}</code>.
+                            Validator placeholders additionally include <code>{candidateAUnitLength}</code> and
+                            <code>{candidateBUnitLength}</code>. Candidate identity is mapped back only after judging.
                         </p>
                     </div>
                 </div>

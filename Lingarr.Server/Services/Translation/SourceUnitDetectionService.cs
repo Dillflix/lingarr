@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Lingarr.Core.Configuration;
@@ -36,7 +37,7 @@ public sealed class SourceUnitDetectionService : ISourceUnitDetectionService
         """;
 
     public const string DefaultValidatorSystemPrompt = """
-        You are a subtitle source-unit segmentation judge. Compare two proposed boundaries for the same consecutive source-language subtitle cues. Decide which grouping better identifies one complete linguistic unit beginning at cue 1. Prefer semantic/syntactic completeness while avoiding unrelated sentences or speaker turns. Return JSON only.
+        You are a subtitle source-unit segmentation judge. Compare Candidate A and Candidate B for the same consecutive source-language subtitle cues. Their origins are intentionally hidden and their A/B order is randomized. Judge only which boundary better identifies one complete linguistic unit beginning at cue 1. Prefer semantic/syntactic completeness while avoiding unrelated sentences or speaker turns. Do not infer or favor how either candidate was produced. Return JSON only.
         """;
 
     public const string DefaultValidatorUserPrompt = """
@@ -46,10 +47,10 @@ public sealed class SourceUnitDetectionService : ISourceUnitDetectionService
         Consecutive subtitle cues:
         {sourceCuesJson}
 
-        Model proposal unitLength: {modelUnitLength}
-        Heuristic proposal unitLength: {heuristicUnitLength}
+        Candidate A unitLength: {candidateAUnitLength}
+        Candidate B unitLength: {candidateBUnitLength}
 
-        Choose which proposal better identifies exactly one linguistic translation unit beginning at cue 1. Return JSON with winner ("model" or "heuristic"), modelScore (0-100), heuristicScore (0-100), and reason.
+        Choose which candidate better identifies exactly one linguistic translation unit beginning at cue 1. The candidates' origins are deliberately undisclosed. Return JSON with winner ("A" or "B"), candidateAScore (0-100), candidateBScore (0-100), and reason.
         """;
 
     private readonly ISettingService _settings;
@@ -305,9 +306,14 @@ public sealed class SourceUnitDetectionService : ISourceUnitDetectionService
 
         try
         {
+            var modelIsCandidateA = IsModelCandidateA(request, modelUnitLength, heuristicUnitLength);
+            var candidateAUnitLength = modelIsCandidateA ? modelUnitLength : heuristicUnitLength;
+            var candidateBUnitLength = modelIsCandidateA ? heuristicUnitLength : modelUnitLength;
             var userPrompt = RenderValidatorPrompt(
                 config.UserPrompt,
                 request,
+                candidateAUnitLength,
+                candidateBUnitLength,
                 modelUnitLength,
                 heuristicUnitLength);
             var (content, latencyMs) = await SendChatCompletionAsync(
@@ -322,11 +328,31 @@ public sealed class SourceUnitDetectionService : ISourceUnitDetectionService
                 return null;
             }
 
+            string winner;
+            double modelScore;
+            double heuristicScore;
+            if (parsed.Value.IsBlind)
+            {
+                var candidateAWon = string.Equals(parsed.Value.Winner, "A", StringComparison.OrdinalIgnoreCase);
+                winner = candidateAWon == modelIsCandidateA
+                    ? SourceUnitDetectionModes.Model
+                    : SourceUnitDetectionModes.Heuristic;
+                modelScore = modelIsCandidateA ? parsed.Value.FirstScore : parsed.Value.SecondScore;
+                heuristicScore = modelIsCandidateA ? parsed.Value.SecondScore : parsed.Value.FirstScore;
+            }
+            else
+            {
+                // Backward compatibility for explicitly customized legacy validator prompts.
+                winner = parsed.Value.Winner;
+                modelScore = parsed.Value.FirstScore;
+                heuristicScore = parsed.Value.SecondScore;
+            }
+
             return new SourceUnitDetectionValidatorDecision
             {
-                Winner = parsed.Value.Winner,
-                ModelScore = parsed.Value.ModelScore,
-                HeuristicScore = parsed.Value.HeuristicScore,
+                Winner = winner,
+                ModelScore = modelScore,
+                HeuristicScore = heuristicScore,
                 Reason = parsed.Value.Reason,
                 LatencyMs = latencyMs,
                 Model = config.Model
@@ -516,12 +542,12 @@ public sealed class SourceUnitDetectionService : ISourceUnitDetectionService
                 type = "object",
                 properties = new
                 {
-                    winner = new { type = "string", @enum = new[] { "model", "heuristic" } },
-                    modelScore = new { type = "number", minimum = 0, maximum = 100 },
-                    heuristicScore = new { type = "number", minimum = 0, maximum = 100 },
+                    winner = new { type = "string", @enum = new[] { "A", "B" } },
+                    candidateAScore = new { type = "number", minimum = 0, maximum = 100 },
+                    candidateBScore = new { type = "number", minimum = 0, maximum = 100 },
                     reason = new { type = "string" }
                 },
-                required = new[] { "winner", "modelScore", "heuristicScore", "reason" },
+                required = new[] { "winner", "candidateAScore", "candidateBScore", "reason" },
                 additionalProperties = false
             }
         }
@@ -536,14 +562,34 @@ public sealed class SourceUnitDetectionService : ISourceUnitDetectionService
     private static string RenderValidatorPrompt(
         string template,
         SourceUnitDetectionRequest request,
+        int candidateAUnitLength,
+        int candidateBUnitLength,
         int modelUnitLength,
         int heuristicUnitLength) =>
         template
             .Replace("{sourceLanguage}", request.SourceLanguage, StringComparison.Ordinal)
             .Replace("{candidateCount}", request.Cues.Count.ToString(), StringComparison.Ordinal)
             .Replace("{sourceCuesJson}", JsonSerializer.Serialize(request.Cues), StringComparison.Ordinal)
+            .Replace("{candidateAUnitLength}", candidateAUnitLength.ToString(), StringComparison.Ordinal)
+            .Replace("{candidateBUnitLength}", candidateBUnitLength.ToString(), StringComparison.Ordinal)
+            // Keep legacy placeholders usable only for intentionally customized old prompts.
             .Replace("{modelUnitLength}", modelUnitLength.ToString(), StringComparison.Ordinal)
             .Replace("{heuristicUnitLength}", heuristicUnitLength.ToString(), StringComparison.Ordinal);
+
+    private static bool IsModelCandidateA(
+        SourceUnitDetectionRequest request,
+        int modelUnitLength,
+        int heuristicUnitLength)
+    {
+        var low = Math.Min(modelUnitLength, heuristicUnitLength);
+        var high = Math.Max(modelUnitLength, heuristicUnitLength);
+        var material = string.Join("
+",
+            request.SourceLanguage,
+            JsonSerializer.Serialize(request.Cues),
+            $"{low}|{high}");
+        return (SHA256.HashData(Encoding.UTF8.GetBytes(material))[0] & 1) == 0;
+    }
 
     private static int ParseUnitLength(string content)
     {
@@ -555,28 +601,43 @@ public sealed class SourceUnitDetectionService : ISourceUnitDetectionService
         return unitLength;
     }
 
-    private static (string Winner, double ModelScore, double HeuristicScore, string Reason)? ParseValidatorDecision(
+    private static (string Winner, double FirstScore, double SecondScore, bool IsBlind, string Reason)? ParseValidatorDecision(
         string content)
     {
         using var document = JsonDocument.Parse(ExtractJsonObject(content));
         var root = document.RootElement;
-        if (!root.TryGetProperty("winner", out var winnerElement) ||
-            !root.TryGetProperty("modelScore", out var modelScoreElement) ||
-            !root.TryGetProperty("heuristicScore", out var heuristicScoreElement))
+        if (!root.TryGetProperty("winner", out var winnerElement))
         {
             return null;
         }
 
         var winner = winnerElement.GetString();
-        if (winner is not ("model" or "heuristic"))
-        {
-            return null;
-        }
-
         var reason = root.TryGetProperty("reason", out var reasonElement)
             ? reasonElement.GetString() ?? string.Empty
             : string.Empty;
-        return (winner, modelScoreElement.GetDouble(), heuristicScoreElement.GetDouble(), reason);
+
+        if (winner is "A" or "B")
+        {
+            if (!root.TryGetProperty("candidateAScore", out var candidateAScoreElement) ||
+                !root.TryGetProperty("candidateBScore", out var candidateBScoreElement))
+            {
+                return null;
+            }
+            return (winner, candidateAScoreElement.GetDouble(), candidateBScoreElement.GetDouble(), true, reason);
+        }
+
+        // Backward compatibility for user-authored prompts created before blind A/B validation.
+        if (winner is "model" or "heuristic")
+        {
+            if (!root.TryGetProperty("modelScore", out var modelScoreElement) ||
+                !root.TryGetProperty("heuristicScore", out var heuristicScoreElement))
+            {
+                return null;
+            }
+            return (winner, modelScoreElement.GetDouble(), heuristicScoreElement.GetDouble(), false, reason);
+        }
+
+        return null;
     }
 
     private static string ExtractAssistantContent(string body)

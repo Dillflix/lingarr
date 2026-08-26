@@ -22,7 +22,6 @@ public class TranslationJob
     private readonly ILogger<TranslationJob> _logger;
     private readonly ILogger<ResegmentationBenchmarkService> _benchmarkLogger;
     private readonly ISourceUnitDetectionService _sourceUnitDetectionService;
-    private readonly ISourceUnitBenchmarkService _sourceUnitBenchmarkService;
     private readonly ISettingService _settings;
     private readonly LingarrDbContext _dbContext;
     private readonly IProgressService _progressService;
@@ -39,7 +38,6 @@ public class TranslationJob
         ILogger<TranslationJob> logger,
         ILogger<ResegmentationBenchmarkService> benchmarkLogger,
         ISourceUnitDetectionService sourceUnitDetectionService,
-        ISourceUnitBenchmarkService sourceUnitBenchmarkService,
         ISettingService settings,
         LingarrDbContext dbContext,
         IProgressService progressService,
@@ -55,7 +53,6 @@ public class TranslationJob
         _logger = logger;
         _benchmarkLogger = benchmarkLogger;
         _sourceUnitDetectionService = sourceUnitDetectionService;
-        _sourceUnitBenchmarkService = sourceUnitBenchmarkService;
         _settings = settings;
         _dbContext = dbContext;
         _progressService = progressService;
@@ -238,8 +235,7 @@ public class TranslationJob
                     _logger,
                     _resegmentationService,
                     benchmarkService,
-                    _sourceUnitDetectionService,
-                    _sourceUnitBenchmarkService);
+                    _sourceUnitDetectionService);
 
                 translatedSubtitles = await sentenceAwareTranslator.TranslateSubtitles(
                     subtitles,

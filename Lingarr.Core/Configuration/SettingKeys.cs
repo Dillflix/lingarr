@@ -57,6 +57,8 @@ public static class SettingKeys
             public const string ValidatorApiKey = "source_unit_detection_validator_api_key";
             public const string ValidatorSystemPrompt = "source_unit_detection_validator_system_prompt";
             public const string ValidatorUserPrompt = "source_unit_detection_validator_user_prompt";
+            public const string BenchmarkCaptureEnabled = "source_unit_benchmark_capture_enabled";
+            public const string BenchmarkMaxSamples = "source_unit_benchmark_max_samples";
         }
 
         public static class Resegmentation

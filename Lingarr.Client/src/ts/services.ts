@@ -20,7 +20,8 @@ import {
     IProofreadLineApplyRequest,
     IProofreadLineRequest,
     IResegmentationEvaluationRequest,
-    IResegmentationBenchmarkRunRequest
+    IResegmentationBenchmarkRunRequest,
+    ISourceUnitBenchmarkRunRequest
 } from '@/ts'
 
 export interface Services {
@@ -40,6 +41,7 @@ export interface Services {
     requestTemplate: IRequestTemplateService
     plugin: IPluginService
     resegmentation: IResegmentationService
+    sourceUnit: ISourceUnitService
 }
 
 export interface IPluginService {
@@ -173,5 +175,12 @@ export interface IResegmentationService {
     benchmarkCount(): Promise<number>
     harvestBenchmark<T>(maxRequests?: number): Promise<T>
     runBenchmark<T>(request: IResegmentationBenchmarkRunRequest): Promise<T>
+    clearBenchmarkSamples(): Promise<number>
+}
+
+export interface ISourceUnitService {
+    benchmarkCount(): Promise<number>
+    benchmarkSamples<T>(limit?: number, sourceLanguage?: string): Promise<T>
+    runBenchmark<T>(request: ISourceUnitBenchmarkRunRequest): Promise<T>
     clearBenchmarkSamples(): Promise<number>
 }

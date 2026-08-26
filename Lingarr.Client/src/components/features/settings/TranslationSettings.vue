@@ -93,6 +93,7 @@
 
         <template v-if="useBatchTranslation !== 'true'">
             <SourceUnitDetectionSettings />
+            <SourceUnitBenchmarkSettings />
             <ResegmentationSettings />
             <ReferenceFreeBenchmarkSettings />
         </template>
@@ -108,6 +109,7 @@ import SaveNotification from '@/components/common/SaveNotification.vue'
 import InputComponent from '@/components/common/InputComponent.vue'
 import ToggleButton from '@/components/common/ToggleButton.vue'
 import SourceUnitDetectionSettings from '@/components/features/settings/SourceUnitDetectionSettings.vue'
+import SourceUnitBenchmarkSettings from '@/components/features/settings/SourceUnitBenchmarkSettings.vue'
 import ResegmentationSettings from '@/components/features/settings/ResegmentationSettings.vue'
 import ReferenceFreeBenchmarkSettings from '@/components/features/settings/ReferenceFreeBenchmarkSettings.vue'
 

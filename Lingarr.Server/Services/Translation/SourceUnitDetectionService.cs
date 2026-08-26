@@ -583,8 +583,7 @@ public sealed class SourceUnitDetectionService : ISourceUnitDetectionService
     {
         var low = Math.Min(modelUnitLength, heuristicUnitLength);
         var high = Math.Max(modelUnitLength, heuristicUnitLength);
-        var material = string.Join("
-",
+        var material = string.Join("\n",
             request.SourceLanguage,
             JsonSerializer.Serialize(request.Cues),
             $"{low}|{high}");

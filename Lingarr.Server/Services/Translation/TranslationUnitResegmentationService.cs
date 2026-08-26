@@ -642,8 +642,7 @@ public sealed class TranslationUnitResegmentationService : ITranslationUnitReseg
         var right = JsonSerializer.Serialize(deterministicSegments);
         var ordered = new[] { left, right };
         Array.Sort(ordered, StringComparer.Ordinal);
-        var material = string.Join("
-",
+        var material = string.Join("\n",
             request.SourceLanguage,
             request.TargetLanguage,
             JsonSerializer.Serialize(request.SourceSegments),

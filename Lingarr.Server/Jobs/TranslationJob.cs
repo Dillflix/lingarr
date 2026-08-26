@@ -21,7 +21,8 @@ public class TranslationJob
 {
     private readonly ILogger<TranslationJob> _logger;
     private readonly ILogger<ResegmentationBenchmarkService> _benchmarkLogger;
-    private readonly ILogger<SourceUnitDetectionService> _sourceUnitDetectionLogger;
+    private readonly ISourceUnitDetectionService _sourceUnitDetectionService;
+    private readonly ISourceUnitBenchmarkService _sourceUnitBenchmarkService;
     private readonly ISettingService _settings;
     private readonly LingarrDbContext _dbContext;
     private readonly IProgressService _progressService;
@@ -37,7 +38,8 @@ public class TranslationJob
     public TranslationJob(
         ILogger<TranslationJob> logger,
         ILogger<ResegmentationBenchmarkService> benchmarkLogger,
-        ILogger<SourceUnitDetectionService> sourceUnitDetectionLogger,
+        ISourceUnitDetectionService sourceUnitDetectionService,
+        ISourceUnitBenchmarkService sourceUnitBenchmarkService,
         ISettingService settings,
         LingarrDbContext dbContext,
         IProgressService progressService,
@@ -52,7 +54,8 @@ public class TranslationJob
     {
         _logger = logger;
         _benchmarkLogger = benchmarkLogger;
-        _sourceUnitDetectionLogger = sourceUnitDetectionLogger;
+        _sourceUnitDetectionService = sourceUnitDetectionService;
+        _sourceUnitBenchmarkService = sourceUnitBenchmarkService;
         _settings = settings;
         _dbContext = dbContext;
         _progressService = progressService;
@@ -228,10 +231,6 @@ public class TranslationJob
                     _resegmentationService,
                     _httpClientFactory,
                     _benchmarkLogger);
-                var sourceUnitDetectionService = new SourceUnitDetectionService(
-                    _settings,
-                    _httpClientFactory,
-                    _sourceUnitDetectionLogger);
 
                 var sentenceAwareTranslator = new SentenceAwareTranslationUnitService(
                     translator,
@@ -239,7 +238,8 @@ public class TranslationJob
                     _logger,
                     _resegmentationService,
                     benchmarkService,
-                    sourceUnitDetectionService);
+                    _sourceUnitDetectionService,
+                    _sourceUnitBenchmarkService);
 
                 translatedSubtitles = await sentenceAwareTranslator.TranslateSubtitles(
                     subtitles,

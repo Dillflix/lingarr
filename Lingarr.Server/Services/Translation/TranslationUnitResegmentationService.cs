@@ -502,7 +502,7 @@ public sealed class TranslationUnitResegmentationService : ITranslationUnitReseg
                 new { role = "system", content = systemPrompt },
                 new { role = "user", content = userPrompt }
             },
-            ["temperature"] = 0
+            ["temperature"] = 0.7
         };
 
         if (responseFormat is not null)
